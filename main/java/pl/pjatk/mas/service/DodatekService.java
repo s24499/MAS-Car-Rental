@@ -7,6 +7,7 @@ import pl.pjatk.mas.model.Samochod;
 import pl.pjatk.mas.model.TypRozliczaniaDodatku;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -60,7 +61,12 @@ public class DodatekService {
 
 
     // Aktualizuje istniejący dodatek
-    public void aktualizujDodatek(Long dodatekId, String nazwa, BigDecimal cena, TypRozliczaniaDodatku typ) {
+    public void aktualizujDodatek(Long dodatekId,
+                                  String nazwa,
+                                  BigDecimal cena,
+                                  TypRozliczaniaDodatku typ,
+                                  List<KategoriaSamochodu> kategorie) {
+
         if (dodatekId == null) {
             throw new IllegalArgumentException("ID dodatku nie może być null");
         }
@@ -73,6 +79,9 @@ public class DodatekService {
         if (typ == null) {
             throw new IllegalArgumentException("Typ rozliczania nie może być null");
         }
+        if (kategorie == null) {
+            throw new IllegalArgumentException("Kategorie nie mogą być null (użyj pustej listy dla 'wszystkich')");
+        }
 
         Dodatek dodatek = dodatekDAO.znajdzPoId(dodatekId);
         if (dodatek == null) {
@@ -82,6 +91,7 @@ public class DodatekService {
         dodatek.setNazwa(nazwa.trim());
         dodatek.setCena(cena);
         dodatek.setTypRozliczania(typ);
+        dodatek.setDostepneKategorie(new ArrayList<>(kategorie));
 
         dodatekDAO.aktualizuj(dodatek);
     }
