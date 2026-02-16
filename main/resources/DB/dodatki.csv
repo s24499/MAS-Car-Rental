@@ -5,4 +5,4 @@ id;nazwa;cena;typRozliczania;kategorie
 4;Ubezpieczenie na tor;120.00;ZA_DOBE;SPORTOWY
 5;Łańcuchy śniegowe;40.00;ZA_DOBE;SUV,MIEJSKI
 6;Bagażnik dachowy;25.00;ZA_DOBE;SUV
-7;Nawigacja GPS;20.00;ZA_DOBE;MIEJSKI,SUV,LUKSUSOWY
+7;Nawigacja GPS;100;JEDNORAZOWY;MIEJSKI,SUV,LUKSUSOWY

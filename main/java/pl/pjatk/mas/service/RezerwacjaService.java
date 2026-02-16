@@ -235,4 +235,65 @@ public class RezerwacjaService {
         rezerwacje.add(rezerwacja);
         rezerwacjaDAO.zapiszWszystkie(rezerwacje);
     }
+
+    /**
+     * Usuwa rezerwację
+     */
+    public void usunRezerwacje(Long rezerwacjaId) {
+        if (rezerwacjaId == null) {
+            throw new IllegalArgumentException("ID rezerwacji nie może być null");
+        }
+
+        Rezerwacja rezerwacja = rezerwacjaDAO.znajdzPoId(rezerwacjaId);
+        if (rezerwacja == null) {
+            throw new IllegalArgumentException("Nie znaleziono rezerwacji o ID: " + rezerwacjaId);
+        }
+
+        rezerwacjaDAO.usunPoId(rezerwacjaId);
+    }
+
+    /**
+     * Aktualizuje WSZYSTKIE parametry rezerwacji - LOGIKA BIZNESOWA!
+     */
+    public void aktualizujRezerwacje(Long rezerwacjaId,
+                                     LocalDate nowaDataOd,
+                                     LocalDate nowaDataDo,
+                                     List<Dodatek> noweDodatki,
+                                     StatusRezerwacji nowyStatus) {
+        if (rezerwacjaId == null) {
+            throw new IllegalArgumentException("ID rezerwacji nie może być null");
+        }
+        if (nowaDataOd == null || nowaDataDo == null) {
+            throw new IllegalArgumentException("Daty nie mogą być null");
+        }
+        if (nowaDataDo.isBefore(nowaDataOd)) {
+            throw new IllegalArgumentException("Data do nie może być wcześniejsza niż data od");
+        }
+        if (nowyStatus == null) {
+            throw new IllegalArgumentException("Status nie może być null");
+        }
+
+        Rezerwacja rezerwacja = rezerwacjaDAO.znajdzPoId(rezerwacjaId);
+        if (rezerwacja == null) {
+            throw new IllegalArgumentException("Nie znaleziono rezerwacji o ID: " + rezerwacjaId);
+        }
+
+        // Aktualizuj wszystkie parametry
+        rezerwacja.setDataOd(nowaDataOd);
+        rezerwacja.setDataDo(nowaDataDo);
+        rezerwacja.setStatus(nowyStatus);
+
+        // Aktualizuj dodatki
+        rezerwacja.getDodatki().clear();
+        if (noweDodatki != null) {
+            rezerwacja.getDodatki().addAll(noweDodatki);
+        }
+
+        // Przelicz cenę na nowo
+        BigDecimal nowaCena = policzCene(rezerwacja);
+        rezerwacja.setCenaCalkowita(nowaCena);
+
+        // Zapisz wszystkie zmiany
+        rezerwacjaDAO.aktualizuj(rezerwacja);
+    }
 }

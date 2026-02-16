@@ -72,6 +72,14 @@ public class Rezerwacja {
         return dodatki;
     }
 
+    public void setDataOd(LocalDate dataOd) {
+        this.dataOd = dataOd;
+    }
+
+    public void setDataDo(LocalDate dataDo) {
+        this.dataDo = dataDo;
+    }
+
     @Override
     public String toString() {
         return "Rezerwacja #" + id + " - " +

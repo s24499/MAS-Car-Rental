@@ -4,7 +4,9 @@ import pl.pjatk.mas.dao.DodatekDAO;
 import pl.pjatk.mas.model.Dodatek;
 import pl.pjatk.mas.model.KategoriaSamochodu;
 import pl.pjatk.mas.model.Samochod;
+import pl.pjatk.mas.model.TypRozliczaniaDodatku;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -56,13 +58,45 @@ public class DodatekService {
         dodatekDAO.zapiszWszystkie(dodatki);
     }
 
+
     // Aktualizuje istniejący dodatek
-    public void aktualizujDodatek(Dodatek dodatek) {
+    public void aktualizujDodatek(Long dodatekId, String nazwa, BigDecimal cena, TypRozliczaniaDodatku typ) {
+        if (dodatekId == null) {
+            throw new IllegalArgumentException("ID dodatku nie może być null");
+        }
+        if (nazwa == null || nazwa.trim().isEmpty()) {
+            throw new IllegalArgumentException("Nazwa nie może być pusta");
+        }
+        if (cena == null || cena.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Cena musi być większa niż 0");
+        }
+        if (typ == null) {
+            throw new IllegalArgumentException("Typ rozliczania nie może być null");
+        }
+
+        Dodatek dodatek = dodatekDAO.znajdzPoId(dodatekId);
+        if (dodatek == null) {
+            throw new IllegalArgumentException("Nie znaleziono dodatku o ID: " + dodatekId);
+        }
+
+        dodatek.setNazwa(nazwa.trim());
+        dodatek.setCena(cena);
+        dodatek.setTypRozliczania(typ);
+
         dodatekDAO.aktualizuj(dodatek);
     }
 
     // Usuwa dodatek
-    public void usunDodatek(Long id) {
-        dodatekDAO.usunPoId(id);
+    public void usunDodatek(Long dodatekId) {
+        if (dodatekId == null) {
+            throw new IllegalArgumentException("ID dodatku nie może być null");
+        }
+
+        Dodatek dodatek = dodatekDAO.znajdzPoId(dodatekId);
+        if (dodatek == null) {
+            throw new IllegalArgumentException("Nie znaleziono dodatku o ID: " + dodatekId);
+        }
+
+        dodatekDAO.usunPoId(dodatekId);
     }
 }
