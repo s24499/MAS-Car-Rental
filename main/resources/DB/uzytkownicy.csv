@@ -1,0 +1,4 @@
+typ;id;login;haslo;imie;nazwisko;email
+KLIENT;1;klient;klient;Klient;Klientowski;klient@klientowski.com
+PRACOWNIK;2;pracownik;pracownik;Olgierd;Marciniszyn;
+KLIENT;3;s24499;haslo;Olgierd;Marciniszyn;s24499@pjwstk.edu.pl

@@ -1,0 +1,4 @@
+id;marka;model;numerRejestracyjny;mocKM;rocznik;kategoria;cennikId
+1;BMW;M3;WX12345;480;2022;SPORTOWY;1
+2;Toyota;Corolla;WX55555;120;2019;MIEJSKI;2
+3;Volvo;XC60;WX99999;190;2021;SUV;3

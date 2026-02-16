@@ -1,0 +1,8 @@
+id;nazwa;cena;typRozliczania;kategorie
+1;Fotelik dziecięcy;30.00;ZA_DOBE;MIEJSKI,SUV
+2;Bukiet kwiatów;50.00;JEDNORAZOWY;LUKSUSOWY
+3;Dodatkowy kierowca;0.15;PROCENT_OD_STAWKI;MIEJSKI,SUV,LUKSUSOWY,SPORTOWY
+4;Ubezpieczenie na tor;120.00;ZA_DOBE;SPORTOWY
+5;Łańcuchy śniegowe;40.00;ZA_DOBE;SUV,MIEJSKI
+6;Bagażnik dachowy;25.00;ZA_DOBE;SUV
+7;Nawigacja GPS;20.00;ZA_DOBE;MIEJSKI,SUV,LUKSUSOWY
