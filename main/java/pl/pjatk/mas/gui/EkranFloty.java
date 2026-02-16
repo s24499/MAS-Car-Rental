@@ -4,10 +4,27 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.DatePicker;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SelectionMode;
+import javafx.scene.control.Separator;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.Tooltip;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import pl.pjatk.mas.model.*;
+import pl.pjatk.mas.model.Dodatek;
+import pl.pjatk.mas.model.Pracownik;
+import pl.pjatk.mas.model.Rezerwacja;
+import pl.pjatk.mas.model.Samochod;
+import pl.pjatk.mas.model.StatusRezerwacji;
 import pl.pjatk.mas.service.DodatekService;
 import pl.pjatk.mas.service.FlotaService;
 import pl.pjatk.mas.service.RezerwacjaService;
@@ -15,67 +32,102 @@ import pl.pjatk.mas.util.App;
 import pl.pjatk.mas.util.Session;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Główny ekran aplikacji – prezentuje listę samochodów
- * oraz umożliwia utworzenie rezerwacji.
- *
- * ARCHITEKTURA: GUI → Service → DAO → CSV
+ * Główny ekran floty.
+ * Odpowiada za prezentację danych i wywołania Service na akcje użytkownika.
  */
 public class EkranFloty {
 
-    // Serwisy
     private final RezerwacjaService rezerwacjaService = new RezerwacjaService();
     private final FlotaService flotaService = new FlotaService();
     private final DodatekService dodatekService = new DodatekService();
 
     /**
-     * Wyświetla okno z listą samochodów i formularzem rezerwacji.
+     * Buduje i pokazuje główny widok floty.
      */
     public void pokaz(Stage stage) {
-        // Wczytanie wszystkich samochodów wraz z rezerwacjami
-        List<Samochod> auta = flotaService.pobierzWszystkieSamochody();
+        boolean pracownik = Session.getZalogowany() instanceof Pracownik;
 
-        // ========== GÓRNY PASEK ==========
+        // --- Top bar (nawigacja) ---
+        HBox topBar = zbudujTopBar(stage);
+
+        // --- Lewy panel (lista aut) ---
+        ListView<Samochod> listaAut = new ListView<>();
+        VBox lewyPanel = zbudujLewyPanel(stage, pracownik, listaAut);
+
+        // --- Prawy panel (szczegóły + formularz) ---
+        TextArea szczegoly = new TextArea();
+        ListView<Rezerwacja> listaRez = new ListView<>();
+        ListView<Dodatek> listaDod = new ListView<>();
+        DatePicker dataOd = new DatePicker();
+        DatePicker dataDo = new DatePicker();
+        Label wartoscCeny = new Label("0.00 zł");
+        Button btnRezerwuj = new Button("Zarezerwuj samochód");
+
+        VBox prawyPanel = zbudujPrawyPanel(stage, pracownik, szczegoly, listaRez, listaDod, dataOd, dataDo, wartoscCeny, btnRezerwuj, listaAut);
+
+        ScrollPane scroll = new ScrollPane(prawyPanel);
+        scroll.setFitToWidth(true);
+
+        // --- Połączenie: wybór auta -> odświeżenie UI ---
+        listaAut.getSelectionModel().selectedItemProperty().addListener((obs, stary, nowy) -> {
+            if (nowy == null) {
+                wyczyscPrawyPanel(szczegoly, listaRez, listaDod, wartoscCeny);
+                return;
+            }
+            pokazSzczegolyAuta(nowy, szczegoly);
+            ustawRezerwacjeAuta(pracownik, stage, nowy, listaRez);
+            ustawDodatkiAuta(nowy, listaDod);
+            przeliczCene(nowy, dataOd, dataDo, listaDod, wartoscCeny);
+        });
+
+        // --- Przeliczanie ceny ---
+        dataOd.valueProperty().addListener((o, oldVal, newVal) -> przeliczCene(listaAut.getSelectionModel().getSelectedItem(), dataOd, dataDo, listaDod, wartoscCeny));
+        dataDo.valueProperty().addListener((o, oldVal, newVal) -> przeliczCene(listaAut.getSelectionModel().getSelectedItem(), dataOd, dataDo, listaDod, wartoscCeny));
+        listaDod.getSelectionModel().selectedItemProperty().addListener((o, oldVal, newVal) -> przeliczCene(listaAut.getSelectionModel().getSelectedItem(), dataOd, dataDo, listaDod, wartoscCeny));
+
+        // --- Rezerwacja ---
+        btnRezerwuj.setMaxWidth(Double.MAX_VALUE);
+        btnRezerwuj.setOnAction(e -> obsluzRezerwacje(listaAut, dataOd, dataDo, listaDod, wartoscCeny, pracownik, listaRez));
+
+        // --- Layout ---
+        BorderPane root = new BorderPane();
+        root.setTop(topBar);
+        root.setLeft(lewyPanel);
+        root.setCenter(scroll);
+
+        stage.setScene(new Scene(root, 1000, 700));
+        stage.setTitle("Flota - Wypożyczalnia");
+        stage.show();
+    }
+
+    /**
+     * Buduje górny pasek nawigacji.
+     */
+    private HBox zbudujTopBar(Stage stage) {
         Button btnMojeRezerwacje = new Button("Moje rezerwacje");
         Button btnWyloguj = new Button("Wyloguj");
 
-        HBox topBar = new HBox(10, btnMojeRezerwacje, btnWyloguj);
-        topBar.setAlignment(Pos.CENTER_LEFT);
-        topBar.setPadding(new Insets(10));
-
-        btnMojeRezerwacje.setOnAction(e -> {
-            if (Session.getZalogowany() == null) {
-                alert("Tylko zalogowani użytkownicy mogą przeglądać rezerwacje");
-                return;
-            }
-            if (!(Session.getZalogowany() instanceof Klient)) {
-                alert("Tylko klienci mogą przeglądać swoje rezerwacje");
-                return;
-            }
-            new EkranMojeRezerwacje().pokaz(new Stage());
-        });
-
+        btnMojeRezerwacje.setOnAction(e -> new EkranMojeRezerwacje().pokaz(new Stage()));
         btnWyloguj.setOnAction(e -> {
             Session.setZalogowany(null);
             new App().start(stage);
         });
 
-        // ========== LEWY PANEL - LISTA SAMOCHODÓW ==========
-        VBox lewyPanel = new VBox(10);
-        lewyPanel.setPadding(new Insets(15));
-        lewyPanel.setPrefWidth(280);
+        HBox topBar = new HBox(10, btnMojeRezerwacje, btnWyloguj);
+        topBar.setAlignment(Pos.CENTER_LEFT);
+        topBar.setPadding(new Insets(10));
+        return topBar;
+    }
 
-        boolean pracownik = Session.getZalogowany() instanceof Pracownik;
-
+    /**
+     * Buduje lewy panel z listą aut + opcje pracownika (dodaj/edytuj).
+     */
+    private VBox zbudujLewyPanel(Stage stage, boolean pracownik, ListView<Samochod> listaAut) {
         Label lblAuta = new Label("Dostępne samochody");
-
-        // Pasek nad listą: tytuł + przycisk "+"
-        HBox naglowekListyAut = new HBox(10);
-        naglowekListyAut.setAlignment(Pos.CENTER_LEFT);
 
         Button btnDodajAuto = new Button("+");
         btnDodajAuto.setPrefWidth(35);
@@ -84,324 +136,245 @@ public class EkranFloty {
         btnDodajAuto.setVisible(pracownik);
         btnDodajAuto.setManaged(pracownik);
 
-        naglowekListyAut.getChildren().addAll(lblAuta, btnDodajAuto);
+        HBox naglowek = new HBox(10, lblAuta, btnDodajAuto);
+        naglowek.setAlignment(Pos.CENTER_LEFT);
 
-        ListView<Samochod> listaAut = new ListView<>();
-        listaAut.setItems(FXCollections.observableArrayList(auta));
+        odswiezListeAut(listaAut);
         VBox.setVgrow(listaAut, Priority.ALWAYS);
 
-        lewyPanel.getChildren().addAll(naglowekListyAut, listaAut);
-
-        // Klik "+" -> dodaj samochód
         btnDodajAuto.setOnAction(e -> {
             boolean dodano = new EkranDodajSamochod().pokazDialog(stage);
             if (dodano) {
-                List<Samochod> odswiezone = flotaService.pobierzWszystkieSamochody();
-                listaAut.setItems(FXCollections.observableArrayList(odswiezone));
-                listaAut.refresh();
+                odswiezListeAut(listaAut);
             }
         });
 
-        // Dwuklik na auto -> edycja (tylko pracownik)
         if (pracownik) {
             listaAut.setOnMouseClicked(event -> {
                 if (event.getClickCount() == 2) {
                     Samochod wybrany = listaAut.getSelectionModel().getSelectedItem();
-                    if (wybrany != null) {
-                        // UWAGA: nazwa klasy wg Twojego projektu
-                        // Jeśli masz EkranEdytujSamochod, zmień poniższą linię na new EkranEdytujSamochod()
-                        boolean zmienionoAuto = new EkranEdytujSamochod().pokazDialog(stage, wybrany);
-                        if (zmienionoAuto) {
-                            List<Samochod> odswiezone = flotaService.pobierzWszystkieSamochody();
-                            listaAut.setItems(FXCollections.observableArrayList(odswiezone));
-                            listaAut.refresh();
-                        }
+                    if (wybrany == null) return;
+
+                    boolean zmienionoAuto = new EkranEdytujSamochod().pokazDialog(stage, wybrany);
+                    if (zmienionoAuto) {
+                        odswiezListeAut(listaAut);
                     }
                 }
             });
         }
 
-        // ========== PRAWY PANEL - SZCZEGÓŁY I REZERWACJA ==========
-        VBox prawyPanel = new VBox(12);
-        prawyPanel.setPadding(new Insets(15));
+        VBox lewyPanel = new VBox(10, naglowek, listaAut);
+        lewyPanel.setPadding(new Insets(15));
+        lewyPanel.setPrefWidth(280);
+        return lewyPanel;
+    }
 
-        // --- Szczegóły samochodu ---
-        Label lblSzczegoly = new Label("Szczegóły samochodu");
-        TextArea szczegoly = new TextArea();
+    /**
+     * Buduje prawy panel ze szczegółami, formularzem rezerwacji i widokiem pracownika.
+     */
+    private VBox zbudujPrawyPanel(Stage stage,
+                                  boolean pracownik,
+                                  TextArea szczegoly,
+                                  ListView<Rezerwacja> listaRez,
+                                  ListView<Dodatek> listaDod,
+                                  DatePicker dataOd,
+                                  DatePicker dataDo,
+                                  Label wartoscCeny,
+                                  Button btnRezerwuj,
+                                  ListView<Samochod> listaAut) {
+
         szczegoly.setEditable(false);
         szczegoly.setPrefHeight(120);
 
-        // --- Rezerwacje (tylko dla pracownika) ---
-        Label lblRezerwacje = new Label("Rezerwacje (widok pracownika)");
-        ListView<Rezerwacja> listaRez = new ListView<>();
-        listaRez.setPrefHeight(100);
+        Label lblSzczegoly = new Label("Szczegóły samochodu");
 
+        Label lblRezerwacje = new Label("Rezerwacje (widok pracownika)");
+        listaRez.setPrefHeight(100);
         lblRezerwacje.setVisible(pracownik);
         lblRezerwacje.setManaged(pracownik);
         listaRez.setVisible(pracownik);
         listaRez.setManaged(pracownik);
 
-        Separator sep = new Separator();
-
-        // --- Formularz rezerwacji ---
-        Label lblFormularz = new Label("Formularz rezerwacji");
-
-        HBox daty = new HBox(10);
-        VBox boxOd = new VBox(3);
-        Label lblOd = new Label("Od:");
-        DatePicker dataOd = new DatePicker();
-        boxOd.getChildren().addAll(lblOd, dataOd);
-
-        VBox boxDo = new VBox(3);
-        Label lblDo = new Label("Do:");
-        DatePicker dataDo = new DatePicker();
-        boxDo.getChildren().addAll(lblDo, dataDo);
-        daty.getChildren().addAll(boxOd, boxDo);
+        HBox daty = new HBox(10,
+                new VBox(3, new Label("Od:"), dataOd),
+                new VBox(3, new Label("Do:"), dataDo)
+        );
 
         Label lblDodatki = new Label("Dodatki (Ctrl+klik):");
-        ListView<Dodatek> listaDod = new ListView<>();
         listaDod.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         listaDod.setItems(FXCollections.observableArrayList());
         listaDod.setPrefHeight(90);
 
-        HBox boxCena = new HBox(10);
+        HBox boxCena = new HBox(10, new Label("Szacowana cena:"), wartoscCeny);
         boxCena.setAlignment(Pos.CENTER);
-        Label lblCena = new Label("Szacowana cena:");
-        Label wartoscCeny = new Label("0.00 zł");
-        boxCena.getChildren().addAll(lblCena, wartoscCeny);
 
-        Button btnRezerwuj = new Button("Zarezerwuj samochód");
-        btnRezerwuj.setMaxWidth(Double.MAX_VALUE);
-
-        // Dodaj elementy formularza rezerwacji
-        prawyPanel.getChildren().addAll(
+        VBox prawyPanel = new VBox(12,
                 lblSzczegoly, szczegoly,
-                lblRezerwacje, listaRez, sep,
-                lblFormularz, daty, lblDodatki, listaDod, boxCena, btnRezerwuj
+                lblRezerwacje, listaRez, new Separator(),
+                new Label("Formularz rezerwacji"),
+                daty,
+                lblDodatki, listaDod,
+                boxCena,
+                btnRezerwuj
         );
+        prawyPanel.setPadding(new Insets(15));
 
-        // --- Zarządzanie dodatkami (tylko dla pracownika) ---
         if (pracownik) {
-            Separator sepDodatki = new Separator();
-
-            // Nagłówek + przycisk "+"
-            HBox naglowekDodatki = new HBox(10);
-            naglowekDodatki.setAlignment(Pos.CENTER_LEFT);
-
-            Label lblZarzadzanieDodatkami = new Label("Zarządzanie dodatkami");
-            lblZarzadzanieDodatkami.setStyle("-fx-font-weight: bold; -fx-font-size: 12;");
-
-            Button btnDodajDodatek = new Button("+");
-            btnDodajDodatek.setPrefWidth(35);
-            btnDodajDodatek.setFocusTraversable(false);
-            btnDodajDodatek.setTooltip(new Tooltip("Dodaj nowy dodatek"));
-
-            naglowekDodatki.getChildren().addAll(lblZarzadzanieDodatkami, btnDodajDodatek);
-
-            ListView<Dodatek> listaAllDodatkow = new ListView<>();
-            listaAllDodatkow.setPrefHeight(100);
-
-            // Wczytaj wszystkie dodatki
-            List<Dodatek> wszystkieDodatki = dodatekService.pobierzWszystkieDodatki();
-            listaAllDodatkow.setItems(FXCollections.observableArrayList(wszystkieDodatki));
-
-            // Klik "+" -> dodaj dodatek
-            btnDodajDodatek.setOnAction(e -> {
-                boolean dodano = new EkranDodajDodatek().pokazDialog(stage);
-                if (dodano) {
-                    // Odśwież listę wszystkich dodatków
-                    List<Dodatek> odswiezone = dodatekService.pobierzWszystkieDodatki();
-                    listaAllDodatkow.setItems(FXCollections.observableArrayList(odswiezone));
-                    listaAllDodatkow.refresh();
-
-                    // Odśwież dodatki dla aktualnie wybranego auta
-                    Samochod aktualneAuto = listaAut.getSelectionModel().getSelectedItem();
-                    if (aktualneAuto != null) {
-                        List<Dodatek> dodatkiAktualnegoAuta = dodatekService.pobierzDodatkiDlaSamochodu(aktualneAuto);
-                        listaDod.setItems(FXCollections.observableArrayList(dodatkiAktualnegoAuta));
-                        listaDod.refresh();
-                    }
-                }
-            });
-
-            // Double-click obsługa na dodatek
-            listaAllDodatkow.setOnMouseClicked(event -> {
-                if (event.getClickCount() == 2) {
-                    Dodatek wybranyDodalek = listaAllDodatkow.getSelectionModel().getSelectedItem();
-                    if (wybranyDodalek != null) {
-                        boolean zmieniono = new EkranEdytujDodatek().pokazDialog(stage, wybranyDodalek);
-                        if (zmieniono) {
-                            // Odśwież listę wszystkich dodatków
-                            List<Dodatek> wszystkieDodatkiOdswiezeni = dodatekService.pobierzWszystkieDodatki();
-                            listaAllDodatkow.setItems(FXCollections.observableArrayList(wszystkieDodatkiOdswiezeni));
-
-                            // Odśwież dodatki dla wybranego samochodu
-                            Samochod aktualneAuto = listaAut.getSelectionModel().getSelectedItem();
-                            if (aktualneAuto != null) {
-                                List<Dodatek> dodatkiAktualnegoAuta = dodatekService.pobierzDodatkiDlaSamochodu(aktualneAuto);
-                                listaDod.setItems(FXCollections.observableArrayList(dodatkiAktualnegoAuta));
-                            }
-                        }
-                    }
-                }
-            });
-
-            prawyPanel.getChildren().addAll(
-                    sepDodatki,
-                    naglowekDodatki,
-                    listaAllDodatkow
-            );
+            prawyPanel.getChildren().addAll(new Separator(), zbudujPanelDodatkow(stage, listaDod, listaAut));
         }
 
-        // Dodanie prawego panelu do ScrollPane
-        ScrollPane scroll = new ScrollPane(prawyPanel);
-        scroll.setFitToWidth(true);
+        return prawyPanel;
+    }
 
-        // ========== LISTENER: Wybór samochodu ==========
-        listaAut.getSelectionModel().selectedItemProperty().addListener((obs, stary, nowy) -> {
-            if (nowy != null) {
-                obslugazaWyborSamochodu(nowy, szczegoly, listaRez, listaDod,
-                        dataOd, dataDo, wartoscCeny, stage, pracownik);
-            } else {
-                // Czyszczenie gdy brak wybranego auta
-                listaDod.setItems(FXCollections.observableArrayList());
-                listaRez.setItems(FXCollections.observableArrayList());
-                szczegoly.clear();
-                wartoscCeny.setText("0.00 zł");
+    /**
+     * Buduje panel zarządzania dodatkami (tylko pracownik).
+     */
+    private VBox zbudujPanelDodatkow(Stage stage, ListView<Dodatek> listaDodDoFormularza, ListView<Samochod> listaAut) {
+        Label lbl = new Label("Zarządzanie dodatkami");
+        lbl.setStyle("-fx-font-weight: bold; -fx-font-size: 12;");
+
+        Button btnDodajDodatek = new Button("+");
+        btnDodajDodatek.setPrefWidth(35);
+        btnDodajDodatek.setFocusTraversable(false);
+        btnDodajDodatek.setTooltip(new Tooltip("Dodaj nowy dodatek"));
+
+        HBox naglowek = new HBox(10, lbl, btnDodajDodatek);
+        naglowek.setAlignment(Pos.CENTER_LEFT);
+
+        ListView<Dodatek> listaAllDodatkow = new ListView<>();
+        listaAllDodatkow.setPrefHeight(100);
+        odswiezListeDodatkow(listaAllDodatkow);
+
+        btnDodajDodatek.setOnAction(e -> {
+            boolean dodano = new EkranDodajDodatek().pokazDialog(stage);
+            if (!dodano) return;
+
+            odswiezListeDodatkow(listaAllDodatkow);
+
+            Samochod aktualneAuto = listaAut.getSelectionModel().getSelectedItem();
+            if (aktualneAuto != null) {
+                listaDodDoFormularza.setItems(FXCollections.observableArrayList(dodatekService.pobierzDodatkiDlaSamochodu(aktualneAuto)));
             }
         });
 
-        // ========== LISTENERY: Przeliczanie ceny ==========
-        dataOd.valueProperty().addListener((o, oldVal, newVal) ->
-                przeliczCene(listaAut.getSelectionModel().getSelectedItem(),
-                        dataOd, dataDo, listaDod, wartoscCeny)
-        );
-        dataDo.valueProperty().addListener((o, oldVal, newVal) ->
-                przeliczCene(listaAut.getSelectionModel().getSelectedItem(),
-                        dataOd, dataDo, listaDod, wartoscCeny)
-        );
-        listaDod.getSelectionModel().selectedItemProperty().addListener((o, oldVal, newVal) ->
-                przeliczCene(listaAut.getSelectionModel().getSelectedItem(),
-                        dataOd, dataDo, listaDod, wartoscCeny)
-        );
+        listaAllDodatkow.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                Dodatek wybrany = listaAllDodatkow.getSelectionModel().getSelectedItem();
+                if (wybrany == null) return;
 
-        // ========== PRZYCISK: Zarezerwuj samochód ==========
-        btnRezerwuj.setOnAction(e -> obslugazaRezerwacjasamochodu(
-                listaAut, dataOd, dataDo, listaDod, wartoscCeny, pracownik, listaRez
-        ));
+                boolean zmieniono = new EkranEdytujDodatek().pokazDialog(stage, wybrany);
+                if (!zmieniono) return;
 
-        // ========== UKŁAD GŁÓWNY ==========
-        BorderPane root = new BorderPane();
-        root.setTop(topBar);
-        root.setLeft(lewyPanel);
-        root.setCenter(scroll);
+                odswiezListeDodatkow(listaAllDodatkow);
 
-        Scene scene = new Scene(root, 1000, 700);
-        stage.setScene(scene);
-        stage.setTitle("Flota - Wypożyczalnia");
-        stage.show();
+                Samochod aktualneAuto = listaAut.getSelectionModel().getSelectedItem();
+                if (aktualneAuto != null) {
+                    listaDodDoFormularza.setItems(FXCollections.observableArrayList(dodatekService.pobierzDodatkiDlaSamochodu(aktualneAuto)));
+                }
+            }
+        });
+
+        return new VBox(10, naglowek, listaAllDodatkow);
     }
 
     /**
-     * Obsługa wyboru samochodu z listy - TYLKO GUI LOGIC!
+     * Ustawia tekst szczegółów dla wybranego auta.
      */
-    private void obslugazaWyborSamochodu(Samochod nowy,
-                                         TextArea szczegoly,
-                                         ListView<Rezerwacja> listaRez,
-                                         ListView<Dodatek> listaDod,
-                                         DatePicker dataOd,
-                                         DatePicker dataDo,
-                                         Label wartoscCeny,
-                                         Stage stage,
-                                         boolean pracownik) {
-        String cena = (nowy.getCennik() != null)
-                ? nowy.getCennik().getStawkaZaDobe() + " zł/dobę"
+    private void pokazSzczegolyAuta(Samochod auto, TextArea szczegoly) {
+        String cena = (auto.getCennik() != null)
+                ? auto.getCennik().getStawkaZaDobe() + " zł/dobę"
                 : "Brak cennika";
 
         szczegoly.setText(
-                "Marka: " + nowy.getMarka() + "\n" +
-                        "Model: " + nowy.getModel() + "\n" +
-                        "Rejestracja: " + nowy.getNumerRejestracyjny() + "\n" +
-                        "Moc: " + nowy.getMocKM() + " KM\n" +
-                        "Rocznik: " + nowy.getRocznik() + "\n" +
-                        "Kategoria: " + nowy.getKategoria() + "\n" +
+                "Marka: " + auto.getMarka() + "\n" +
+                        "Model: " + auto.getModel() + "\n" +
+                        "Rejestracja: " + auto.getNumerRejestracyjny() + "\n" +
+                        "Moc: " + auto.getMocKM() + " KM\n" +
+                        "Rocznik: " + auto.getRocznik() + "\n" +
+                        "Kategoria: " + auto.getKategoria() + "\n" +
                         "Cena: " + cena
         );
-
-        // Wyświetl rezerwacje wybranego samochodu
-        listaRez.setItems(FXCollections.observableArrayList(nowy.getRezerwacje()));
-
-        // Double-click na rezerwacje (tylko dla pracownika)
-        if (pracownik) {
-            listaRez.setOnMouseClicked(event -> {
-                if (event.getClickCount() == 2) {
-                    Rezerwacja wybrana = listaRez.getSelectionModel().getSelectedItem();
-                    if (wybrana != null) {
-                        boolean zmieniono = new EkranEdytujRezerwacje().pokazDialog(stage, wybrana);
-                        if (zmieniono) {
-                            // Odśwież listę rezerwacji
-                            List<Samochod> zaktualizowaneAuta = flotaService.pobierzWszystkieSamochody();
-                            Samochod zaktualizowaneAuto = zaktualizowaneAuta.stream()
-                                    .filter(s -> s.getId().equals(nowy.getId()))
-                                    .findFirst()
-                                    .orElse(nowy);
-                            listaRez.setItems(FXCollections.observableArrayList(
-                                    zaktualizowaneAuto.getRezerwacje()
-                            ));
-                        }
-                    }
-                }
-            });
-        }
-
-        // Pobierz dodatki dla wybranego samochodu
-        List<Dodatek> dodatkiDlaAuta = dodatekService.pobierzDodatkiDlaSamochodu(nowy);
-        listaDod.setItems(FXCollections.observableArrayList(dodatkiDlaAuta));
-
-        przeliczCene(nowy, dataOd, dataDo, listaDod, wartoscCeny);
     }
 
     /**
-     * Obsługa rezerwacji samochodu - TYLKO GUI LOGIC!
-     * Cała logika biznesowa w Service!
+     * Ustawia listę rezerwacji auta i opcję edycji rezerwacji (tylko pracownik).
      */
-    private void obslugazaRezerwacjasamochodu(
-            ListView<Samochod> listaAut,
-            DatePicker dataOd,
-            DatePicker dataDo,
-            ListView<Dodatek> listaDod,
-            Label wartoscCeny,
-            boolean pracownik,
-            ListView<Rezerwacja> listaRez) {
+    private void ustawRezerwacjeAuta(boolean pracownik, Stage stage, Samochod auto, ListView<Rezerwacja> listaRez) {
+        listaRez.setItems(FXCollections.observableArrayList(auto.getRezerwacje()));
 
-        if (Session.getZalogowany() == null) {
-            alert("Tylko zalogowani użytkownicy mogą dokonywać rezerwacji");
+        if (!pracownik) {
+            listaRez.setOnMouseClicked(null);
             return;
         }
 
-        if (!(Session.getZalogowany() instanceof Klient)) {
-            alert("Tylko klienci mogą dokonywać rezerwacji");
-            return;
-        }
+        listaRez.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                Rezerwacja wybrana = listaRez.getSelectionModel().getSelectedItem();
+                if (wybrana == null) return;
 
+                boolean zmieniono = new EkranEdytujRezerwacje().pokazDialog(stage, wybrana);
+                if (!zmieniono) return;
+
+                List<Samochod> odswiezone = flotaService.pobierzWszystkieSamochody();
+                Samochod autoPo = odswiezone.stream()
+                        .filter(s -> s.getId().equals(auto.getId()))
+                        .findFirst()
+                        .orElse(auto);
+
+                listaRez.setItems(FXCollections.observableArrayList(autoPo.getRezerwacje()));
+            }
+        });
+    }
+
+    /**
+     * Ustawia dodatki dostępne dla wybranego auta.
+     */
+    private void ustawDodatkiAuta(Samochod auto, ListView<Dodatek> listaDod) {
+        listaDod.setItems(FXCollections.observableArrayList(dodatekService.pobierzDodatkiDlaSamochodu(auto)));
+    }
+
+    /**
+     * Czyści panel szczegółów, gdy nie ma wybranego auta.
+     */
+    private void wyczyscPrawyPanel(TextArea szczegoly, ListView<Rezerwacja> listaRez, ListView<Dodatek> listaDod, Label wartoscCeny) {
+        szczegoly.clear();
+        listaRez.setItems(FXCollections.observableArrayList());
+        listaDod.setItems(FXCollections.observableArrayList());
+        wartoscCeny.setText("0.00 zł");
+    }
+
+    /**
+     * Odświeża listę aut z danych z Service.
+     */
+    private void odswiezListeAut(ListView<Samochod> listaAut) {
+        List<Samochod> auta = flotaService.pobierzWszystkieSamochody();
+        listaAut.setItems(FXCollections.observableArrayList(auta));
+        listaAut.refresh();
+    }
+
+    /**
+     * Odświeża listę dodatków z danych z Service.
+     */
+    private void odswiezListeDodatkow(ListView<Dodatek> listaAllDodatkow) {
+        listaAllDodatkow.setItems(FXCollections.observableArrayList(dodatekService.pobierzWszystkieDodatki()));
+        listaAllDodatkow.refresh();
+    }
+
+    /**
+     * Obsługuje utworzenie rezerwacji dla wybranego auta.
+     */
+    private void obsluzRezerwacje(ListView<Samochod> listaAut,
+                                  DatePicker dataOd,
+                                  DatePicker dataDo,
+                                  ListView<Dodatek> listaDod,
+                                  Label wartoscCeny,
+                                  boolean pracownik,
+                                  ListView<Rezerwacja> listaRez) {
         Samochod auto = listaAut.getSelectionModel().getSelectedItem();
-        if (auto == null) {
-            alert("Wybierz samochód");
-            return;
-        }
-        if (dataOd.getValue() == null || dataDo.getValue() == null) {
-            alert("Wybierz daty");
-            return;
-        }
-        if (dataDo.getValue().isBefore(dataOd.getValue())) {
-            alert("Nieprawidłowy zakres dat");
-            return;
-        }
 
         try {
-            // Logika biznesowa w Service!
-            Rezerwacja rez = rezerwacjaService.utworzRezerwacje(
-                    (Klient) Session.getZalogowany(),
+            Rezerwacja rez = rezerwacjaService.utworzRezerwacjeDlaZalogowanego(
+                    Session.getZalogowany(),
                     auto,
                     dataOd.getValue(),
                     dataDo.getValue(),
@@ -413,17 +386,14 @@ public class EkranFloty {
                     rez.getDataOd() + " - " + rez.getDataDo() +
                     "\nCena: " + rez.getCenaCalkowita() + " zł");
 
-            // Czyszczenie formularza
             dataOd.setValue(null);
             dataDo.setValue(null);
             listaDod.getSelectionModel().clearSelection();
             wartoscCeny.setText("0.00 zł");
 
-            // Odświeżenie listy rezerwacji dla pracownika
-            if (pracownik) {
+            if (pracownik && auto != null) {
                 listaRez.setItems(FXCollections.observableArrayList(auto.getRezerwacje()));
             }
-
         } catch (IllegalArgumentException | IllegalStateException ex) {
             alert("Błąd: " + ex.getMessage());
         } catch (Exception ex) {
@@ -433,45 +403,28 @@ public class EkranFloty {
     }
 
     /**
-     * Oblicza szacowaną cenę - deleguje do Service!
-     * TYLKO GUI LOGIC (wyświetlanie)!
+     * Przelicza szacowaną cenę rezerwacji na podstawie wyboru dat i dodatków.
      */
     private void przeliczCene(Samochod auto,
                               DatePicker od,
                               DatePicker doDo,
                               ListView<Dodatek> listaDodatkow,
                               Label labelCena) {
-
-        if (auto == null || auto.getCennik() == null ||
-                od.getValue() == null || doDo.getValue() == null) {
-            labelCena.setText("0.00 zł");
-            return;
-        }
-
-        LocalDate dataOd = od.getValue();
-        LocalDate dataDo = doDo.getValue();
-
-        if (dataDo.isBefore(dataOd)) {
-            labelCena.setText("Błąd");
-            return;
-        }
-
         try {
-            // Service oblicza cenę!
             BigDecimal cena = rezerwacjaService.obliczSzacowanaCena(
                     auto,
-                    dataOd,
-                    dataDo,
+                    od.getValue(),
+                    doDo.getValue(),
                     new ArrayList<>(listaDodatkow.getSelectionModel().getSelectedItems())
             );
             labelCena.setText(cena + " zł");
         } catch (Exception e) {
-            labelCena.setText("Błąd");
+            labelCena.setText("0.00 zł");
         }
     }
 
     /**
-     * Wyświetla alert - TYLKO GUI!
+     * Pokazuje prosty komunikat informacyjny.
      */
     private void alert(String msg) {
         new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK).showAndWait();

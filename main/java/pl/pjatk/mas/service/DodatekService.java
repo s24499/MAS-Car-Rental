@@ -11,26 +11,34 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Serwis odpowiedzialny za zarządzanie dodatkami.
+ * Udostępnia odczyt, filtrowanie po kategorii oraz operacje CRUD.
+ */
 public class DodatekService {
+
     private final DodatekDAO dodatekDAO = new DodatekDAO();
 
-    // Zwraca listę wszystkich dodatków
+    /**
+     * Zwraca wszystkie dodatki.
+     */
     public List<Dodatek> pobierzWszystkieDodatki() {
         return dodatekDAO.wczytajWszystkie();
     }
 
-    // Zwraca dodatki dostępne dla konkretnego samochodu (wg kategorii)
+    /**
+     * Zwraca dodatki dostępne dla samochodu (wg kategorii samochodu).
+     */
     public List<Dodatek> pobierzDodatkiDlaSamochodu(Samochod samochod) {
         if (samochod == null) {
             throw new IllegalArgumentException("Samochód nie może być null");
         }
-
-        return pobierzWszystkieDodatki().stream()
-                .filter(d -> d.czyDostepnyDlaKategorii(samochod.getKategoria()))
-                .collect(Collectors.toList());
+        return pobierzDodatkiDlaKategorii(samochod.getKategoria());
     }
 
-    // Zwraca dodatki dla konkretnej kategorii
+    /**
+     * Zwraca dodatki dostępne dla podanej kategorii.
+     */
     public List<Dodatek> pobierzDodatkiDlaKategorii(KategoriaSamochodu kategoria) {
         if (kategoria == null) {
             throw new IllegalArgumentException("Kategoria nie może być null");
@@ -41,62 +49,71 @@ public class DodatekService {
                 .collect(Collectors.toList());
     }
 
-    // Znajduje dodatek po ID
+    /**
+     * Zwraca dodatek po ID (lub null jeśli nie istnieje).
+     */
     public Dodatek znajdzDodatekPoId(Long id) {
         return dodatekDAO.znajdzPoId(id);
     }
 
-    // Dodaje nowy dodatek
-    public void dodajDodatek(Dodatek dodatek) {
+    /**
+     * Dodaje nowy dodatek na podstawie danych z GUI.
+     * Waliduje dane, wyznacza ID i zapisuje do pliku.
+     */
+    public Dodatek dodajDodatek(String nazwa,
+                                BigDecimal cena,
+                                TypRozliczaniaDodatku typ,
+                                List<KategoriaSamochodu> kategorie) {
+        String nazwaOk = wymaganaNazwa(nazwa);
+        walidujCene(cena);
+        wymaganyTyp(typ);
+
+        List<KategoriaSamochodu> kategorieOk = bezpieczneKategorie(kategorie);
+
         List<Dodatek> dodatki = pobierzWszystkieDodatki();
+        long noweId = wyznaczNoweId(dodatki);
 
-        // Sprawdź unikalność ID
-        if (dodatki.stream().anyMatch(d -> d.getId().equals(dodatek.getId()))) {
-            throw new IllegalArgumentException("Dodatek o tym ID już istnieje");
-        }
-
-        dodatki.add(dodatek);
+        Dodatek nowy = new Dodatek(noweId, nazwaOk, cena, typ, kategorieOk);
+        dodatki.add(nowy);
         dodatekDAO.zapiszWszystkie(dodatki);
+
+        return nowy;
     }
 
-
-    // Aktualizuje istniejący dodatek
+    /**
+     * Aktualizuje dane istniejącego dodatku.
+     */
     public void aktualizujDodatek(Long dodatekId,
                                   String nazwa,
                                   BigDecimal cena,
                                   TypRozliczaniaDodatku typ,
                                   List<KategoriaSamochodu> kategorie) {
-
         if (dodatekId == null) {
             throw new IllegalArgumentException("ID dodatku nie może być null");
         }
-        if (nazwa == null || nazwa.trim().isEmpty()) {
-            throw new IllegalArgumentException("Nazwa nie może być pusta");
-        }
-        if (cena == null || cena.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Cena musi być większa niż 0");
-        }
-        if (typ == null) {
-            throw new IllegalArgumentException("Typ rozliczania nie może być null");
-        }
-        if (kategorie == null) {
-            throw new IllegalArgumentException("Kategorie nie mogą być null (użyj pustej listy dla 'wszystkich')");
-        }
+
+        String nazwaOk = wymaganaNazwa(nazwa);
+        walidujCene(cena);
+        wymaganyTyp(typ);
+
+        List<KategoriaSamochodu> kategorieOk = bezpieczneKategorie(kategorie);
 
         Dodatek dodatek = dodatekDAO.znajdzPoId(dodatekId);
         if (dodatek == null) {
             throw new IllegalArgumentException("Nie znaleziono dodatku o ID: " + dodatekId);
         }
 
-        dodatek.setNazwa(nazwa.trim());
+        dodatek.setNazwa(nazwaOk);
         dodatek.setCena(cena);
         dodatek.setTypRozliczania(typ);
-        dodatek.setDostepneKategorie(new ArrayList<>(kategorie));
+        dodatek.setDostepneKategorie(new ArrayList<>(kategorieOk));
 
         dodatekDAO.aktualizuj(dodatek);
     }
 
-    // Usuwa dodatek
+    /**
+     * Usuwa dodatek o podanym ID.
+     */
     public void usunDodatek(Long dodatekId) {
         if (dodatekId == null) {
             throw new IllegalArgumentException("ID dodatku nie może być null");
@@ -108,5 +125,50 @@ public class DodatekService {
         }
 
         dodatekDAO.usunPoId(dodatekId);
+    }
+
+    /**
+     * Waliduje nazwę i zwraca wersję po trim().
+     */
+    private String wymaganaNazwa(String nazwa) {
+        if (nazwa == null || nazwa.trim().isEmpty()) {
+            throw new IllegalArgumentException("Nazwa nie może być pusta");
+        }
+        return nazwa.trim();
+    }
+
+    /**
+     * Waliduje cenę dodatku.
+     */
+    private void walidujCene(BigDecimal cena) {
+        if (cena == null || cena.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Cena musi być większa niż 0");
+        }
+    }
+
+    /**
+     * Waliduje typ rozliczania dodatku.
+     */
+    private void wymaganyTyp(TypRozliczaniaDodatku typ) {
+        if (typ == null) {
+            throw new IllegalArgumentException("Typ rozliczania nie może być null");
+        }
+    }
+
+    /**
+     * Normalizuje listę kategorii: null/pusta lista oznacza "dostępny dla wszystkich".
+     */
+    private List<KategoriaSamochodu> bezpieczneKategorie(List<KategoriaSamochodu> kategorie) {
+        return (kategorie == null) ? new ArrayList<>() : new ArrayList<>(kategorie);
+    }
+
+    /**
+     * Wyznacza kolejne ID dodatku na podstawie danych w pliku.
+     */
+    private long wyznaczNoweId(List<Dodatek> dodatki) {
+        return dodatki.stream()
+                .mapToLong(Dodatek::getId)
+                .max()
+                .orElse(0L) + 1;
     }
 }

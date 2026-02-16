@@ -9,15 +9,64 @@ import java.util.List;
 
 public class UzytkownikDAO extends BazaDAO {
     private static final String PLIK = "uzytkownicy.csv";
+    private static final String HEADER = "typ;id;login;haslo;imie;nazwisko;email";
 
-    // Wczytuje wszystkich użytkowników
+    /** Odczytuje wszystkich użytkowników z CSV. */
     public List<Uzytkownik> wczytajWszystkich() {
-        List<Uzytkownik> uzytkownicy = new ArrayList<>();
         List<String> linie = wczytajLinie(sciezkaDoPliku(PLIK));
+        List<Uzytkownik> uzytkownicy = new ArrayList<>();
 
-        // Pominięcie nagłówka
+        if (linie.size() <= 1) {
+            return uzytkownicy; // brak danych lub sam nagłówek
+        }
+
         for (int i = 1; i < linie.size(); i++) {
-            String[] dane = linie.get(i).split(";", -1); // -1 aby zachować puste pola
+            Uzytkownik u = parseUzytkownik(linie.get(i));
+            if (u != null) {
+                uzytkownicy.add(u);
+            }
+        }
+
+        return uzytkownicy;
+    }
+
+    /** Zapisuje użytkowników do CSV (nadpisuje plik). */
+    public void zapiszWszystkich(List<Uzytkownik> uzytkownicy) {
+        List<String> linie = new ArrayList<>();
+        linie.add(HEADER);
+
+        if (uzytkownicy != null) {
+            for (Uzytkownik u : uzytkownicy) {
+                String linia = toLinia(u);
+                if (linia != null) {
+                    linie.add(linia);
+                }
+            }
+        }
+
+        zapiszLinie(sciezkaDoPliku(PLIK), linie);
+    }
+
+    /** Wyszukuje użytkownika po ID (pełny odczyt pliku). */
+    public Uzytkownik znajdzPoId(int id) {
+        return wczytajWszystkich().stream()
+                .filter(u -> u.getId() == id)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** Usuwa użytkownika po ID. */
+    public void usunPoId(int id) {
+        List<Uzytkownik> uzytkownicy = wczytajWszystkich();
+        uzytkownicy.removeIf(u -> u.getId() == id);
+        zapiszWszystkich(uzytkownicy);
+    }
+
+    /** Odpowiada za parsowanie jednej linii CSV do obiektu użytkownika. */
+    private Uzytkownik parseUzytkownik(String linia) {
+        try {
+            String[] dane = linia.split(";", -1);
+
             String typ = dane[0];
             int id = Integer.parseInt(dane[1]);
             String login = dane[2];
@@ -27,64 +76,41 @@ public class UzytkownikDAO extends BazaDAO {
 
             if ("KLIENT".equals(typ)) {
                 String email = dane.length > 6 ? dane[6] : "";
-                uzytkownicy.add(new Klient(id, login, haslo, imie, nazwisko, email));
-            } else if ("PRACOWNIK".equals(typ)) {
-                uzytkownicy.add(new Pracownik(id, login, haslo, imie, nazwisko));
+                return new Klient(id, login, haslo, imie, nazwisko, email);
             }
-        }
-        return uzytkownicy;
-    }
 
-    // Zapisuje wszystkich użytkowników do pliku
-    public void zapiszWszystkich(List<Uzytkownik> uzytkownicy) {
-        List<String> linie = new ArrayList<>();
-        linie.add("typ;id;login;haslo;imie;nazwisko;email");
-
-        for (Uzytkownik u : uzytkownicy) {
-            if (u instanceof Klient klient) {
-                linie.add("KLIENT;" +
-                        klient.getId() + ";" +
-                        klient.getLogin() + ";" +
-                        klient.getHaslo() + ";" +
-                        klient.getImie() + ";" +
-                        klient.getNazwisko() + ";" +
-                        klient.getEmail());
-            } else if (u instanceof Pracownik pracownik) {
-                linie.add("PRACOWNIK;" +
-                        pracownik.getId() + ";" +
-                        pracownik.getLogin() + ";" +
-                        pracownik.getHaslo() + ";" +
-                        pracownik.getImie() + ";" +
-                        pracownik.getNazwisko() + ";");
+            if ("PRACOWNIK".equals(typ)) {
+                return new Pracownik(id, login, haslo, imie, nazwisko);
             }
+
+            return null;
+        } catch (Exception e) {
+            System.err.println("Błąd podczas wczytywania użytkownika: " + e.getMessage());
+            return null;
         }
-        zapiszLinie(sciezkaDoPliku(PLIK), linie);
     }
 
-    // Znajduje użytkownika po ID
-    public Uzytkownik znajdzPoId(int id) {
-        return wczytajWszystkich().stream()
-                .filter(u -> u.getId() == id)
-                .findFirst()
-                .orElse(null);
-    }
-
-    // Aktualizuje istniejącego użytkownika - zbędne, czy nie można wykorzystać?
-    public void aktualizuj(Uzytkownik uzytkownik) {
-        List<Uzytkownik> uzytkownicy = wczytajWszystkich();
-        for (int i = 0; i < uzytkownicy.size(); i++) {
-            if (uzytkownicy.get(i).getId() == uzytkownik.getId()) {
-                uzytkownicy.set(i, uzytkownik);
-                break;
-            }
+    /** Odpowiada za budowanie jednej linii CSV na podstawie obiektu użytkownika. */
+    private String toLinia(Uzytkownik u) {
+        if (u instanceof Klient klient) {
+            return "KLIENT;" +
+                    klient.getId() + ";" +
+                    klient.getLogin() + ";" +
+                    klient.getHaslo() + ";" +
+                    klient.getImie() + ";" +
+                    klient.getNazwisko() + ";" +
+                    klient.getEmail();
         }
-        zapiszWszystkich(uzytkownicy);
-    }
 
-    // Usuwa użytkownika po ID - zbędne, czy nie można wykorzystać?
-    public void usunPoId(int id) {
-        List<Uzytkownik> uzytkownicy = wczytajWszystkich();
-        uzytkownicy.removeIf(u -> u.getId() == id);
-        zapiszWszystkich(uzytkownicy);
+        if (u instanceof Pracownik pracownik) {
+            return "PRACOWNIK;" +
+                    pracownik.getId() + ";" +
+                    pracownik.getLogin() + ";" +
+                    pracownik.getHaslo() + ";" +
+                    pracownik.getImie() + ";" +
+                    pracownik.getNazwisko() + ";";
+        }
+
+        return null;
     }
 }

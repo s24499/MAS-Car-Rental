@@ -4,12 +4,20 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Control;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.SelectionMode;
+import javafx.scene.control.Separator;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import pl.pjatk.mas.model.Dodatek;
 import pl.pjatk.mas.model.KategoriaSamochodu;
 import pl.pjatk.mas.model.TypRozliczaniaDodatku;
 import pl.pjatk.mas.service.DodatekService;
@@ -22,10 +30,13 @@ import java.util.List;
 public class EkranDodajDodatek {
 
     private final DodatekService dodatekService = new DodatekService();
-    private boolean dodano = false;
+    private boolean dodano;
 
+    /**
+     * Otwiera okno i zwraca true, jeśli dodatek został dodany.
+     */
     public boolean pokazDialog(Stage parentStage) {
-        this.dodano = false;
+        dodano = false;
 
         Stage dialog = new Stage();
         dialog.initModality(Modality.APPLICATION_MODAL);
@@ -33,11 +44,8 @@ public class EkranDodajDodatek {
         dialog.setTitle("Dodaj dodatek");
         dialog.setResizable(false);
 
-        VBox root = new VBox(15);
-        root.setPadding(new Insets(20));
-
-        Label lblTytul = new Label("Dodawanie dodatku");
-        lblTytul.setStyle("-fx-font-size: 14; -fx-font-weight: bold;");
+        Label tytul = new Label("Dodawanie dodatku");
+        tytul.setStyle("-fx-font-size: 14; -fx-font-weight: bold;");
 
         TextField tfNazwa = new TextField();
         tfNazwa.setPrefWidth(250);
@@ -46,10 +54,9 @@ public class EkranDodajDodatek {
         tfCena.setPrefWidth(250);
 
         ComboBox<TypRozliczaniaDodatku> cbTyp = new ComboBox<>();
-        cbTyp.getItems().addAll(TypRozliczaniaDodatku.values());
+        cbTyp.getItems().setAll(TypRozliczaniaDodatku.values());
         cbTyp.setPrefWidth(250);
 
-        // Kategorie
         CheckBox chkWszystkieKategorie = new CheckBox("Dostępny dla wszystkich kategorii");
         chkWszystkieKategorie.setStyle("-fx-font-weight: bold;");
 
@@ -59,7 +66,67 @@ public class EkranDodajDodatek {
         listaKategorii.setItems(FXCollections.observableArrayList(KategoriaSamochodu.values()));
         listaKategorii.getItems().sort(Comparator.comparing(Enum::name));
 
-        // domyślnie: dla wszystkich
+        ustawTrybKategorii(chkWszystkieKategorie, listaKategorii);
+
+        VBox pola = new VBox(12,
+                pole("Nazwa:", tfNazwa),
+                pole("Cena:", tfCena),
+                pole("Typ rozliczania:", cbTyp),
+                poleKategorie(chkWszystkieKategorie, listaKategorii)
+        );
+
+        Button btnDodaj = new Button("Dodaj");
+        btnDodaj.setPrefWidth(120);
+        btnDodaj.setOnAction(e -> obsluzDodanie(dialog, tfNazwa, tfCena, cbTyp, chkWszystkieKategorie, listaKategorii));
+
+        Button btnAnuluj = new Button("Anuluj");
+        btnAnuluj.setPrefWidth(120);
+        btnAnuluj.setOnAction(e -> dialog.close());
+
+        HBox przyciski = new HBox(10, btnDodaj, btnAnuluj);
+        przyciski.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox root = new VBox(15, tytul, new Separator(), pola, new Separator(), przyciski);
+        root.setPadding(new Insets(20));
+
+        dialog.setScene(new Scene(root, 520, 520));
+        dialog.showAndWait();
+
+        return dodano;
+    }
+
+    /**
+     * Obsługuje kliknięcie "Dodaj" (GUI parsuje cenę, Service waliduje i zapisuje).
+     */
+    private void obsluzDodanie(Stage dialog,
+                               TextField tfNazwa,
+                               TextField tfCena,
+                               ComboBox<TypRozliczaniaDodatku> cbTyp,
+                               CheckBox chkWszystkieKategorie,
+                               ListView<KategoriaSamochodu> listaKategorii) {
+        try {
+            String nazwa = tfNazwa.getText();
+            BigDecimal cena = parseCena(tfCena.getText());
+
+            TypRozliczaniaDodatku typ = cbTyp.getValue();
+            List<KategoriaSamochodu> kategorie = pobierzKategorie(chkWszystkieKategorie, listaKategorii);
+
+            dodatekService.dodajDodatek(nazwa, cena, typ, kategorie);
+
+            dodano = true;
+            pokazInfo("Sukces", "Dodatek został dodany.");
+            dialog.close();
+        } catch (IllegalArgumentException ex) {
+            pokazBlad("Błąd walidacji", ex.getMessage());
+        } catch (Exception ex) {
+            pokazBlad("Błąd", "Nie udało się dodać dodatku: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Ustawia zachowanie UI: checkbox "wszystkie" włącza/wyłącza listę kategorii.
+     */
+    private void ustawTrybKategorii(CheckBox chkWszystkieKategorie, ListView<KategoriaSamochodu> listaKategorii) {
         chkWszystkieKategorie.setSelected(true);
         listaKategorii.setDisable(true);
 
@@ -71,114 +138,66 @@ public class EkranDodajDodatek {
                 listaKategorii.setDisable(false);
             }
         });
-
-        VBox pola = new VBox(12,
-                pole("Nazwa:", tfNazwa),
-                pole("Cena:", tfCena),
-                pole("Typ rozliczania:", cbTyp),
-                kategoriePole(chkWszystkieKategorie, listaKategorii)
-        );
-
-        HBox btnBox = new HBox(10);
-        btnBox.setAlignment(Pos.CENTER_RIGHT);
-
-        Button btnDodaj = new Button("Dodaj");
-        btnDodaj.setPrefWidth(120);
-        btnDodaj.setOnAction(e -> {
-            try {
-                String nazwa = tfNazwa.getText().trim();
-                if (nazwa.isEmpty()) {
-                    blad("Błąd", "Nazwa nie może być pusta.");
-                    return;
-                }
-
-                TypRozliczaniaDodatku typ = cbTyp.getValue();
-                if (typ == null) {
-                    blad("Błąd", "Wybierz typ rozliczania.");
-                    return;
-                }
-
-                BigDecimal cena = new BigDecimal(tfCena.getText().trim());
-                if (cena.compareTo(BigDecimal.ZERO) <= 0) {
-                    blad("Błąd", "Cena musi być większa niż 0.");
-                    return;
-                }
-
-                boolean dlaWszystkich = chkWszystkieKategorie.isSelected();
-                List<KategoriaSamochodu> kategorie = dlaWszystkich
-                        ? new ArrayList<>()
-                        : new ArrayList<>(listaKategorii.getSelectionModel().getSelectedItems());
-
-                if (!dlaWszystkich && kategorie.isEmpty()) {
-                    blad("Błąd", "Wybierz przynajmniej jedną kategorię albo zaznacz 'Dostępny dla wszystkich kategorii'.");
-                    return;
-                }
-
-                Long noweId = wygenerujNoweId();
-
-                Dodatek nowy = new Dodatek(noweId, nazwa, cena, typ, kategorie);
-
-                dodatekService.dodajDodatek(nowy);
-
-                dodano = true;
-                info("Sukces", "Dodano nowy dodatek.");
-                dialog.close();
-
-            } catch (NumberFormatException ex) {
-                blad("Błąd", "Cena musi być liczbą.");
-            } catch (IllegalArgumentException ex) {
-                blad("Błąd", ex.getMessage());
-            } catch (Exception ex) {
-                blad("Błąd", "Nie udało się dodać dodatku: " + ex.getMessage());
-            }
-        });
-
-        Button btnAnuluj = new Button("Anuluj");
-        btnAnuluj.setPrefWidth(120);
-        btnAnuluj.setOnAction(e -> dialog.close());
-
-        btnBox.getChildren().addAll(btnDodaj, btnAnuluj);
-
-        root.getChildren().addAll(lblTytul, new Separator(), pola, btnBox);
-
-        dialog.setScene(new Scene(root, 460, 520));
-        dialog.showAndWait();
-
-        return dodano;
     }
 
-    private Long wygenerujNoweId() {
-        return dodatekService.pobierzWszystkieDodatki().stream()
-                .map(Dodatek::getId)
-                .max(Long::compareTo)
-                .orElse(0L) + 1;
+    /**
+     * Buduje sekcję formularza: etykieta + kontrolka.
+     */
+    private VBox pole(String label, Control field) {
+        VBox box = new VBox(4);
+        box.getChildren().addAll(new Label(label), field);
+        return box;
     }
 
-    private VBox pole(String etykieta, Control control) {
-        Label l = new Label(etykieta);
-        l.setStyle("-fx-font-weight: bold;");
-        VBox b = new VBox(4, l, control);
-        control.setPrefWidth(300);
-        return b;
+    /**
+     * Buduje sekcję formularza dla kategorii.
+     */
+    private VBox poleKategorie(CheckBox chk, ListView<KategoriaSamochodu> lista) {
+        VBox box = new VBox(6);
+        box.getChildren().addAll(chk, lista);
+        return box;
     }
 
-    private VBox kategoriePole(CheckBox chkWszystkie, ListView<KategoriaSamochodu> lista) {
-        Label l = new Label("Kategorie (Ctrl+klik):");
-        l.setStyle("-fx-font-weight: bold;");
-        return new VBox(6, l, chkWszystkie, lista);
+    /**
+     * Parsuje cenę wprowadzoną przez użytkownika.
+     */
+    private BigDecimal parseCena(String txt) {
+        try {
+            return new BigDecimal(txt.trim());
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Cena musi być liczbą (np. 10.00).");
+        }
     }
 
-    private void info(String t, String m) {
-        new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK) {{
-            setTitle(t);
-            setHeaderText(null);
-        }}.showAndWait();
+    /**
+     * Pobiera listę kategorii z UI. Pusta lista oznacza "wszystkie".
+     */
+    private List<KategoriaSamochodu> pobierzKategorie(CheckBox chkWszystkieKategorie, ListView<KategoriaSamochodu> listaKategorii) {
+        if (chkWszystkieKategorie.isSelected()) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(listaKategorii.getSelectionModel().getSelectedItems());
     }
 
-    private void blad(String t, String m) {
-        new Alert(Alert.AlertType.ERROR, m, ButtonType.OK) {{
-            setTitle(t);
-            setHeaderText(null);
-        }}.showAndWait();
+    /**
+     * Pokazuje komunikat informacyjny.
+     */
+    private void pokazInfo(String tytul, String tresc) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        a.setTitle(tytul);
+        a.setHeaderText(null);
+        a.setContentText(tresc);
+        a.showAndWait();
+    }
+
+    /**
+     * Pokazuje komunikat błędu.
+     */
+    private void pokazBlad(String tytul, String tresc) {
+        Alert a = new Alert(Alert.AlertType.ERROR);
+        a.setTitle(tytul);
+        a.setHeaderText(null);
+        a.setContentText(tresc);
+        a.showAndWait();
     }
 }

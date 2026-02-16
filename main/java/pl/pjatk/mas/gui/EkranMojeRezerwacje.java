@@ -4,159 +4,202 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TextArea;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import pl.pjatk.mas.model.Klient;
 import pl.pjatk.mas.model.Rezerwacja;
-import pl.pjatk.mas.model.StatusRezerwacji;
 import pl.pjatk.mas.service.RezerwacjaService;
 import pl.pjatk.mas.util.Session;
 
 import java.util.List;
 
 /**
- * Ekran prezentujący rezerwacje zalogowanego klienta.
- * Umożliwia podgląd szczegółów i anulowanie nowych rezerwacji.
+ * Ekran pokazujący rezerwacje zalogowanego klienta.
+ * Dostęp i filtrowanie danych realizuje RezerwacjaService.
  */
 public class EkranMojeRezerwacje {
 
-    // Serwis do zarządzania rezerwacjami
     private final RezerwacjaService rezerwacjaService = new RezerwacjaService();
 
-    // Lista rezerwacji widoczna w GUI
-    private ObservableList<Rezerwacja> listaRezerwacji;
-
-    // Komponent wyświetlający listę rezerwacji
-    private ListView<Rezerwacja> listView;
+    private final ObservableList<Rezerwacja> listaRezerwacji = FXCollections.observableArrayList();
+    private final ListView<Rezerwacja> listView = new ListView<>(listaRezerwacji);
 
     /**
-     * Wyświetla okno z listą rezerwacji bieżącego klienta.
+     * Buduje i pokazuje widok.
      */
     public void pokaz(Stage stage) {
-        // Odczyt aktualnie zalogowanego klienta z Session
-        Klient klient = (Klient) Session.getZalogowany();
+        if (!wczytajRezerwacje(stage)) {
+            return;
+        }
 
-        // Pobranie rezerwacji tylko tego klienta za pomocą serwisu
-        List<Rezerwacja> rezerwacje = rezerwacjaService.pobierzRezerwacjeKlienta(klient);
-
-        listaRezerwacji = FXCollections.observableArrayList(rezerwacje);
-        listView = new ListView<>(listaRezerwacji);
-
-        // Lewy panel – lista rezerwacji
-        VBox lewyPanel = new VBox(10);
-        lewyPanel.setPadding(new Insets(15));
-        lewyPanel.setPrefWidth(350);
-
-        Label labelLista = new Label("Moje rezerwacje");
-
-        VBox.setVgrow(listView, Priority.ALWAYS);
-        lewyPanel.getChildren().addAll(labelLista, listView);
-
-        // Prawy panel – szczegóły wybranej rezerwacji i przycisk anulowania
-        VBox panelPrawy = new VBox(15);
-        panelPrawy.setPadding(new Insets(20));
-        panelPrawy.setPrefWidth(450);
-
-        Label labelSzczegoly = new Label("Szczegóły rezerwacji");
-
+        VBox lewyPanel = zbudujLewyPanel();
         TextArea szczegoly = new TextArea();
-        szczegoly.setEditable(false);
-        szczegoly.setPrefHeight(200);
-
         Button btnAnuluj = new Button("Anuluj rezerwację");
-        btnAnuluj.setMaxWidth(Double.MAX_VALUE);
-        btnAnuluj.setDisable(true); // na początku nie ma wybranej rezerwacji
+        VBox prawyPanel = zbudujPrawyPanel(szczegoly, btnAnuluj);
 
-        panelPrawy.getChildren().addAll(labelSzczegoly, szczegoly, btnAnuluj);
+        polaczZachowania(stage, szczegoly, btnAnuluj);
 
-        // Reakcja na wybór rezerwacji z listy
-        listView.getSelectionModel().selectedItemProperty().addListener((obs, stary, nowy) -> {
-            if (nowy != null) {
-                szczegoly.setText(
-                        "Nr rezerwacji: " + nowy.getId() + "\n" +
-                                "Samochód: " + nowy.getSamochod().getMarka() + " " + nowy.getSamochod().getModel() + "\n" +
-                                "Okres: " + nowy.getDataOd() + " - " + nowy.getDataDo() + "\n" +
-                                "Status: " + nowy.getStatus() + "\n" +
-                                "Cena: " + nowy.getCenaCalkowita() + " zł"
-                );
-
-                // Anulować można tylko rezerwację o statusie NOWA
-                btnAnuluj.setDisable(nowy.getStatus() != StatusRezerwacji.NOWA);
-            } else {
-                szczegoly.clear();
-                btnAnuluj.setDisable(true);
-            }
-        });
-
-        // Obsługa przycisku "Anuluj rezerwację"
-        btnAnuluj.setOnAction(event -> {
-            Rezerwacja wybrana = listView.getSelectionModel().getSelectedItem();
-            if (wybrana != null && wybrana.getStatus() == StatusRezerwacji.NOWA) {
-
-                Alert potwierdzenie = new Alert(Alert.AlertType.CONFIRMATION);
-                potwierdzenie.setTitle("Potwierdzenie");
-                potwierdzenie.setHeaderText("Czy na pewno chcesz anulować rezerwację?");
-                potwierdzenie.setContentText(
-                        "Nr: " + wybrana.getId() + ", " +
-                                wybrana.getSamochod().getMarka() + " " + wybrana.getSamochod().getModel()
-                );
-
-                if (potwierdzenie.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                    try {
-                        // Anulowanie rezerwacji za pomocą serwisu
-                        rezerwacjaService.anulujRezerwacje(wybrana.getId());
-
-                        // Odświeżenie lokalnej listy
-                        wybrana.setStatus(StatusRezerwacji.ANULOWANA);
-
-                        pokazKomunikat("Sukces", "Rezerwacja została anulowana.");
-
-                        // Odświeżenie widoku szczegółów
-                        szczegoly.setText(
-                                "Nr rezerwacji: " + wybrana.getId() + "\n" +
-                                        "Samochód: " + wybrana.getSamochod().getMarka() + " " + wybrana.getSamochod().getModel() + "\n" +
-                                        "Okres: " + wybrana.getDataOd() + " - " + wybrana.getDataDo() + "\n" +
-                                        "Status: " + wybrana.getStatus() + "\n" +
-                                        "Cena: " + wybrana.getCenaCalkowita() + " zł"
-                        );
-                        btnAnuluj.setDisable(true);
-                        listView.refresh();
-                    } catch (Exception e) {
-                        pokazBlad("Błąd", "Nie udało się anulować rezerwacji: " + e.getMessage());
-                    }
-                }
-            }
-        });
-
-        // Główny układ ekranu
         BorderPane root = new BorderPane();
         root.setLeft(lewyPanel);
-        root.setCenter(panelPrawy);
+        root.setCenter(prawyPanel);
 
-        Scene scene = new Scene(root, 850, 600);
-        stage.setScene(scene);
-        stage.setTitle("Moje rezerwacje - Wypożyczalnia");
+        stage.setScene(new Scene(root, 800, 450));
+        stage.setTitle("Moje rezerwacje");
         stage.show();
     }
 
-    // Prosty komunikat informacyjny
-    private void pokazKomunikat(String tytul, String tresc) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(tytul);
-        alert.setHeaderText(null);
-        alert.setContentText(tresc);
-        alert.showAndWait();
+    /**
+     * Wczytuje rezerwacje zalogowanego użytkownika i obsługuje błędy dostępu.
+     */
+    private boolean wczytajRezerwacje(Stage stage) {
+        try {
+            List<Rezerwacja> rezerwacje = rezerwacjaService.pobierzRezerwacjeDlaZalogowanego(Session.getZalogowany());
+            listaRezerwacji.setAll(rezerwacje);
+            return true;
+        } catch (IllegalStateException ex) {
+            pokazBlad("Brak dostępu", ex.getMessage());
+            stage.close();
+            return false;
+        } catch (Exception ex) {
+            pokazBlad("Błąd", "Nie udało się wczytać rezerwacji: " + ex.getMessage());
+            stage.close();
+            return false;
+        }
     }
 
-    // Komunikat błędu
+    /**
+     * Buduje panel z listą rezerwacji.
+     */
+    private VBox zbudujLewyPanel() {
+        Label labelLista = new Label("Moje rezerwacje");
+
+        VBox.setVgrow(listView, Priority.ALWAYS);
+
+        VBox lewyPanel = new VBox(10, labelLista, listView);
+        lewyPanel.setPadding(new Insets(15));
+        lewyPanel.setPrefWidth(350);
+        return lewyPanel;
+    }
+
+    /**
+     * Buduje panel szczegółów oraz przycisk anulowania.
+     */
+    private VBox zbudujPrawyPanel(TextArea szczegoly, Button btnAnuluj) {
+        Label labelSzczegoly = new Label("Szczegóły rezerwacji");
+
+        szczegoly.setEditable(false);
+        szczegoly.setPrefHeight(200);
+
+        btnAnuluj.setMaxWidth(Double.MAX_VALUE);
+        btnAnuluj.setDisable(true);
+
+        VBox panelPrawy = new VBox(15, labelSzczegoly, szczegoly, btnAnuluj);
+        panelPrawy.setPadding(new Insets(20));
+        panelPrawy.setPrefWidth(450);
+        return panelPrawy;
+    }
+
+    /**
+     * Podpina akcje UI: wybór rezerwacji i anulowanie.
+     */
+    private void polaczZachowania(Stage stage, TextArea szczegoly, Button btnAnuluj) {
+        listView.getSelectionModel().selectedItemProperty().addListener((obs, stary, nowy) -> {
+            if (nowy == null) {
+                szczegoly.clear();
+                btnAnuluj.setDisable(true);
+                return;
+            }
+
+            szczegoly.setText(formatSzczegoly(nowy));
+            btnAnuluj.setDisable(false);
+        });
+
+        btnAnuluj.setOnAction(e -> anulujWybrana(stage, szczegoly, btnAnuluj));
+    }
+
+    /**
+     * Formatuje tekst szczegółów rezerwacji do pola tekstowego.
+     */
+    private String formatSzczegoly(Rezerwacja r) {
+        return "ID: " + r.getId() + "\n" +
+                "Samochód: " + r.getSamochod() + "\n" +
+                "Termin: " + r.getDataOd() + " - " + r.getDataDo() + "\n" +
+                "Status: " + r.getStatus() + "\n" +
+                "Cena: " + r.getCenaCalkowita() + " zł\n" +
+                "Dodatki: " + r.getDodatki();
+    }
+
+    /**
+     * Anuluje wybraną rezerwację i odświeża listę.
+     */
+    private void anulujWybrana(Stage stage, TextArea szczegoly, Button btnAnuluj) {
+        Rezerwacja wybrana = listView.getSelectionModel().getSelectedItem();
+        if (wybrana == null) return;
+
+        if (!potwierdzAnulowanie(wybrana)) {
+            return;
+        }
+
+        try {
+            rezerwacjaService.anulujRezerwacje(wybrana.getId());
+
+            // Odśwież dane po zmianie
+            if (!wczytajRezerwacje(stage)) {
+                return;
+            }
+
+            listView.getSelectionModel().clearSelection();
+            btnAnuluj.setDisable(true);
+            szczegoly.clear();
+
+            pokazInfo("Sukces", "Rezerwacja została anulowana.");
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            pokazBlad("Błąd", ex.getMessage());
+        } catch (Exception ex) {
+            pokazBlad("Błąd systemowy", "Nieoczekiwany błąd: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Pyta użytkownika o potwierdzenie anulowania.
+     */
+    private boolean potwierdzAnulowanie(Rezerwacja wybrana) {
+        Alert confirm = new Alert(
+                Alert.AlertType.CONFIRMATION,
+                "Czy na pewno anulować rezerwację #" + wybrana.getId() + "?",
+                ButtonType.YES,
+                ButtonType.NO
+        );
+        confirm.setTitle("Potwierdzenie");
+        confirm.setHeaderText(null);
+
+        return confirm.showAndWait().orElse(ButtonType.NO) == ButtonType.YES;
+    }
+
+    /**
+     * Pokazuje komunikat informacyjny.
+     */
+    private void pokazInfo(String tytul, String tresc) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, tresc, ButtonType.OK);
+        a.setTitle(tytul);
+        a.setHeaderText(null);
+        a.showAndWait();
+    }
+
+    /**
+     * Pokazuje komunikat błędu.
+     */
     private void pokazBlad(String tytul, String tresc) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle(tytul);
-        alert.setHeaderText(null);
-        alert.setContentText(tresc);
-        alert.showAndWait();
+        Alert a = new Alert(Alert.AlertType.ERROR, tresc, ButtonType.OK);
+        a.setTitle(tytul);
+        a.setHeaderText(null);
+        a.showAndWait();
     }
 }

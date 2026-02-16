@@ -3,39 +3,39 @@ package pl.pjatk.mas.gui;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Control;
+import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import pl.pjatk.mas.dao.CennikDAO;
-import pl.pjatk.mas.dao.SamochodDAO;
-import pl.pjatk.mas.model.Cennik;
 import pl.pjatk.mas.model.KategoriaSamochodu;
 import pl.pjatk.mas.model.Samochod;
+import pl.pjatk.mas.service.FlotaService;
 
 import java.time.Year;
 
 public class EkranEdytujSamochod {
 
-    private final SamochodDAO samochodDAO = new SamochodDAO();
-    private final CennikDAO cennikDAO = new CennikDAO();
-    private boolean zmieniono = false;
+    private final FlotaService flotaService = new FlotaService();
+    private boolean zmieniono;
 
+    /**
+     * Otwiera okno i zwraca true, jeśli samochód został zaktualizowany lub usunięty.
+     */
     public boolean pokazDialog(Stage parentStage, Samochod samochod) {
-        this.zmieniono = false;
+        zmieniono = false;
 
-        Stage dialog = new Stage();
-        dialog.initModality(Modality.APPLICATION_MODAL);
-        dialog.initOwner(parentStage);
-        dialog.setTitle("Edytuj samochód: " + samochod);
-        dialog.setResizable(false);
+        Stage dialog = utworzDialog(parentStage, samochod);
 
-        VBox root = new VBox(15);
-        root.setPadding(new Insets(20));
-
-        Label lblTytul = new Label("Edycja samochodu");
-        lblTytul.setStyle("-fx-font-size: 14; -fx-font-weight: bold;");
+        Label tytul = new Label("Edycja samochodu");
+        tytul.setStyle("-fx-font-size: 14; -fx-font-weight: bold;");
 
         TextField tfMarka = new TextField(samochod.getMarka());
         TextField tfModel = new TextField(samochod.getModel());
@@ -44,13 +44,11 @@ public class EkranEdytujSamochod {
         TextField tfRocznik = new TextField(String.valueOf(samochod.getRocznik().getValue()));
 
         ComboBox<KategoriaSamochodu> cbKategoria = new ComboBox<>();
-        cbKategoria.getItems().addAll(KategoriaSamochodu.values());
+        cbKategoria.getItems().setAll(KategoriaSamochodu.values());
         cbKategoria.setValue(samochod.getKategoria());
 
-        Label lblCennikInfo = new Label();
-        lblCennikInfo.setStyle("-fx-font-weight: bold;");
-        ustawCennikInfo(lblCennikInfo, cbKategoria.getValue());
-        cbKategoria.valueProperty().addListener((obs, oldVal, newVal) -> ustawCennikInfo(lblCennikInfo, newVal));
+        Label infoCennik = new Label("Cennik: przypisywany wg kategorii (logika w Service)");
+        infoCennik.setStyle("-fx-font-weight: bold;");
 
         VBox pola = new VBox(12,
                 pole("Marka:", tfMarka),
@@ -59,143 +57,148 @@ public class EkranEdytujSamochod {
                 pole("Moc (KM):", tfMoc),
                 pole("Rocznik (YYYY):", tfRocznik),
                 pole("Kategoria:", cbKategoria),
-                lblCennikInfo
+                infoCennik
         );
-
-        HBox btnBox = new HBox(10);
-        btnBox.setAlignment(Pos.CENTER_RIGHT);
 
         Button btnZapisz = new Button("Zapisz zmiany");
         btnZapisz.setPrefWidth(120);
-        btnZapisz.setOnAction(e -> {
-            try {
-                String marka = tfMarka.getText().trim();
-                String model = tfModel.getText().trim();
-                String nr = tfNrRej.getText().trim();
-
-                if (marka.isEmpty() || model.isEmpty() || nr.isEmpty()) {
-                    blad("Błąd", "Marka, model i numer rejestracyjny nie mogą być puste.");
-                    return;
-                }
-
-                int moc = Integer.parseInt(tfMoc.getText().trim());
-                if (moc <= 0) {
-                    blad("Błąd", "Moc musi być większa niż 0.");
-                    return;
-                }
-
-                int rok = Integer.parseInt(tfRocznik.getText().trim());
-                if (rok < 1900 || rok > Year.now().getValue() + 1) {
-                    blad("Błąd", "Nieprawidłowy rocznik.");
-                    return;
-                }
-
-                KategoriaSamochodu kat = cbKategoria.getValue();
-                if (kat == null) {
-                    blad("Błąd", "Wybierz kategorię.");
-                    return;
-                }
-
-                Cennik cennik = cennikDAO.znajdzPoKategorii(kat);
-                if (cennik == null) {
-                    blad("Błąd", "Brak cennika dla kategorii " + kat + ". Uzupełnij cenniki.csv.");
-                    return;
-                }
-
-                // Samochod nie ma setterów pól -> tworzymy nowy obiekt z tym samym ID
-                Samochod zaktualizowany = new Samochod(
-                        samochod.getId(),
-                        marka,
-                        model,
-                        nr,
-                        moc,
-                        Year.of(rok),
-                        kat
-                );
-                zaktualizowany.setCennik(cennik);
-
-                samochodDAO.aktualizuj(zaktualizowany);
-
-                zmieniono = true;
-                info("Sukces", "Samochód został zaktualizowany.");
-                dialog.close();
-            } catch (NumberFormatException ex) {
-                blad("Błąd", "Moc i rocznik muszą być liczbami.");
-            } catch (Exception ex) {
-                blad("Błąd", "Nie udało się zapisać zmian: " + ex.getMessage());
-            }
-        });
+        btnZapisz.setOnAction(e -> obsluzZapis(dialog, samochod, tfMarka, tfModel, tfNrRej, tfMoc, tfRocznik, cbKategoria));
 
         Button btnUsun = new Button("Usuń samochód");
         btnUsun.setPrefWidth(120);
-        btnUsun.setStyle("-fx-font-size: 11; -fx-text-fill: white; -fx-background-color: #d32f2f;");
-        btnUsun.setOnAction(e -> {
-            Alert potwierdzenie = new Alert(Alert.AlertType.CONFIRMATION);
-            potwierdzenie.setTitle("Potwierdzenie usunięcia");
-            potwierdzenie.setHeaderText("Czy na pewno chcesz usunąć ten samochód?");
-            potwierdzenie.setContentText(
-                    "Marka/Model: " + samochod.getMarka() + " " + samochod.getModel() +
-                            "\nNr rej: " + samochod.getNumerRejestracyjny()
-            );
-
-            if (potwierdzenie.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                try {
-                    samochodDAO.usunPoId(samochod.getId());
-                    zmieniono = true;
-                    info("Sukces", "Samochód został usunięty.");
-                    dialog.close();
-                } catch (Exception ex) {
-                    blad("Błąd", "Nie udało się usunąć samochodu: " + ex.getMessage());
-                }
-            }
-        });
+        btnUsun.setStyle("-fx-text-fill: white; -fx-background-color: #d32f2f;");
+        btnUsun.setOnAction(e -> obsluzUsuniecie(dialog, samochod));
 
         Button btnAnuluj = new Button("Anuluj");
         btnAnuluj.setPrefWidth(120);
         btnAnuluj.setOnAction(e -> dialog.close());
 
-        btnBox.getChildren().addAll(btnZapisz, btnUsun, btnAnuluj);
+        HBox przyciski = new HBox(10, btnZapisz, btnUsun, btnAnuluj);
+        przyciski.setAlignment(Pos.CENTER_RIGHT);
 
-        root.getChildren().addAll(lblTytul, new Separator(), pola, btnBox);
+        VBox root = new VBox(15, tytul, new Separator(), pola, new Separator(), przyciski);
+        root.setPadding(new Insets(20));
 
-        dialog.setScene(new Scene(root, 460, 510));
+        dialog.setScene(new Scene(root, 520, 540));
         dialog.showAndWait();
 
         return zmieniono;
     }
 
-    private void ustawCennikInfo(Label lbl, KategoriaSamochodu kat) {
-        if (kat == null) {
-            lbl.setText("Cennik: (wybierz kategorię)");
+    /**
+     * Tworzy okno dialogu.
+     */
+    private Stage utworzDialog(Stage parentStage, Samochod samochod) {
+        Stage dialog = new Stage();
+        dialog.initModality(Modality.APPLICATION_MODAL);
+        dialog.initOwner(parentStage);
+        dialog.setTitle("Edytuj samochód: " + samochod);
+        dialog.setResizable(false);
+        return dialog;
+    }
+
+    /**
+     * Obsługuje zapis zmian (GUI parsuje liczby, Service waliduje i aktualizuje).
+     */
+    private void obsluzZapis(Stage dialog,
+                             Samochod samochod,
+                             TextField tfMarka,
+                             TextField tfModel,
+                             TextField tfNrRej,
+                             TextField tfMoc,
+                             TextField tfRocznik,
+                             ComboBox<KategoriaSamochodu> cbKategoria) {
+        try {
+            int moc = parseInt(tfMoc.getText(), "Moc i rocznik muszą być liczbami.");
+            int rocznikInt = parseInt(tfRocznik.getText(), "Moc i rocznik muszą być liczbami.");
+
+            flotaService.aktualizujSamochod(
+                    samochod.getId(),
+                    tfMarka.getText(),
+                    tfModel.getText(),
+                    tfNrRej.getText(),
+                    moc,
+                    Year.of(rocznikInt),
+                    cbKategoria.getValue()
+            );
+
+            zmieniono = true;
+            pokazInfo("Sukces", "Samochód został zaktualizowany.");
+            dialog.close();
+        } catch (IllegalArgumentException ex) {
+            pokazBlad("Błąd", ex.getMessage());
+        } catch (Exception ex) {
+            pokazBlad("Błąd", "Nie udało się zapisać zmian: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Obsługuje usunięcie samochodu (z potwierdzeniem).
+     */
+    private void obsluzUsuniecie(Stage dialog, Samochod samochod) {
+        Alert confirm = new Alert(
+                Alert.AlertType.CONFIRMATION,
+                "Czy na pewno chcesz usunąć samochód?\n\n" + samochod,
+                ButtonType.OK,
+                ButtonType.CANCEL
+        );
+        confirm.setTitle("Potwierdzenie usunięcia");
+        confirm.setHeaderText(null);
+
+        if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
             return;
         }
-        Cennik c = cennikDAO.znajdzPoKategorii(kat);
-        if (c == null) {
-            lbl.setText("Cennik: brak dla kategorii " + kat);
-        } else {
-            lbl.setText("Cennik: ID " + c.getId() + " / " + c.getStawkaZaDobe() + " zł/doba");
+
+        try {
+            flotaService.usunSamochod(samochod.getId());
+
+            zmieniono = true;
+            pokazInfo("Sukces", "Samochód został usunięty.");
+            dialog.close();
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            pokazBlad("Błąd", ex.getMessage());
+        } catch (Exception ex) {
+            pokazBlad("Błąd", "Nie udało się usunąć samochodu: " + ex.getMessage());
         }
     }
 
-    private VBox pole(String etykieta, Control control) {
-        Label l = new Label(etykieta);
-        l.setStyle("-fx-font-weight: bold;");
-        VBox b = new VBox(4, l, control);
-        control.setPrefWidth(300);
-        return b;
+    /**
+     * Buduje sekcję formularza: etykieta + kontrolka.
+     */
+    private VBox pole(String label, Control field) {
+        VBox box = new VBox(4);
+        box.getChildren().addAll(new Label(label), field);
+        return box;
     }
 
-    private void info(String t, String m) {
-        new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK) {{
-            setTitle(t);
-            setHeaderText(null);
-        }}.showAndWait();
+    /**
+     * Parsuje liczbę całkowitą z komunikatem dla użytkownika.
+     */
+    private int parseInt(String txt, String bladMsg) {
+        try {
+            return Integer.parseInt(txt.trim());
+        } catch (Exception ex) {
+            throw new IllegalArgumentException(bladMsg);
+        }
     }
 
-    private void blad(String t, String m) {
-        new Alert(Alert.AlertType.ERROR, m, ButtonType.OK) {{
-            setTitle(t);
-            setHeaderText(null);
-        }}.showAndWait();
+    /**
+     * Pokazuje komunikat informacyjny.
+     */
+    private void pokazInfo(String tytul, String tresc) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, tresc, ButtonType.OK);
+        a.setTitle(tytul);
+        a.setHeaderText(null);
+        a.showAndWait();
+    }
+
+    /**
+     * Pokazuje komunikat błędu.
+     */
+    private void pokazBlad(String tytul, String tresc) {
+        Alert a = new Alert(Alert.AlertType.ERROR, tresc, ButtonType.OK);
+        a.setTitle(tytul);
+        a.setHeaderText(null);
+        a.showAndWait();
     }
 }

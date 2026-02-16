@@ -6,124 +6,122 @@ import pl.pjatk.mas.model.Uzytkownik;
 
 import java.util.List;
 
+/**
+ * Serwis odpowiedzialny za autoryzację i zarządzanie kontami użytkowników.
+ * Waliduje dane wejściowe i zapisuje zmiany przez UzytkownikDAO.
+ */
 public class AuthService {
+
+    private static final int MIN_DLUGOSC_HASLA = 4;
+
     private final UzytkownikDAO uzytkownikDAO = new UzytkownikDAO();
 
     /**
-     * Loguje użytkownika
+     * Weryfikuje login i hasło użytkownika.
+     * Zwraca użytkownika jeśli dane są poprawne, w przeciwnym razie null.
      */
     public Uzytkownik zaloguj(String login, String haslo) {
-        if (login == null || login.trim().isEmpty()) {
-            throw new IllegalArgumentException("Login nie może być pusty");
-        }
-        if (haslo == null || haslo.trim().isEmpty()) {
-            throw new IllegalArgumentException("Hasło nie może być puste");
-        }
+        String l = wymaganyTekst(login, "Login nie może być pusty");
+        String h = wymaganyTekst(haslo, "Hasło nie może być puste");
 
-        List<Uzytkownik> uzytkownicy = uzytkownikDAO.wczytajWszystkich();
-
-        return uzytkownicy.stream()
-                .filter(u -> u.getLogin().equals(login) && u.getHaslo().equals(haslo))
+        return uzytkownikDAO.wczytajWszystkich().stream()
+                .filter(u -> u.getLogin().equals(l) && u.getHaslo().equals(h))
                 .findFirst()
                 .orElse(null);
     }
 
     /**
-     * Rejestruje nowego klienta
+     * Rejestruje nowego klienta.
+     * Zwraca false, jeśli login jest zajęty.
      */
-    public boolean zarejestruj(String login, String haslo,
-                               String imie, String nazwisko, String email) {
-        if (login == null || login.trim().isEmpty()) {
-            throw new IllegalArgumentException("Login nie może być pusty");
-        }
-        if (haslo == null || haslo.trim().isEmpty()) {
-            throw new IllegalArgumentException("Hasło nie może być puste");
-        }
-        if (imie == null || imie.trim().isEmpty()) {
-            throw new IllegalArgumentException("Imię nie może być puste");
-        }
-        if (nazwisko == null || nazwisko.trim().isEmpty()) {
-            throw new IllegalArgumentException("Nazwisko nie może być puste");
-        }
-        if (email == null || email.trim().isEmpty()) {
-            throw new IllegalArgumentException("Email nie może być pusty");
-        }
+    public boolean zarejestruj(String login, String haslo, String imie, String nazwisko, String email) {
+        String l = wymaganyTekst(login, "Login nie może być pusty");
+        String h = wymaganyTekst(haslo, "Hasło nie może być puste");
+        String i = wymaganyTekst(imie, "Imię nie może być puste");
+        String n = wymaganyTekst(nazwisko, "Nazwisko nie może być puste");
+        String e = wymaganyTekst(email, "Email nie może być pusty");
 
-        // Walidacja formatu email (podstawowa)
-        if (!email.contains("@") || !email.contains(".")) {
-            throw new IllegalArgumentException("Podaj prawidłowy adres email");
-        }
-
-        // Walidacja długości hasła
-        if (haslo.length() < 4) {
-            throw new IllegalArgumentException("Hasło musi mieć co najmniej 4 znaki");
-        }
+        walidujEmail(e);
+        walidujHaslo(h);
 
         List<Uzytkownik> uzytkownicy = uzytkownikDAO.wczytajWszystkich();
-
-        // Sprawdź unikalność loginu
-        if (uzytkownicy.stream().anyMatch(u -> u.getLogin().equals(login))) {
+        if (czyLoginZajety(uzytkownicy, l)) {
             return false;
         }
 
-        // Znajdź najwyższe ID
-        int maxId = uzytkownicy.stream()
-                .mapToInt(Uzytkownik::getId)
-                .max()
-                .orElse(0);
-
-        // Utwórz nowego klienta
-        Klient nowyKlient = new Klient(maxId + 1, login, haslo, imie, nazwisko, email);
-        uzytkownicy.add(nowyKlient);
+        int noweId = wyznaczNoweId(uzytkownicy);
+        uzytkownicy.add(new Klient(noweId, l, h, i, n, e));
         uzytkownikDAO.zapiszWszystkich(uzytkownicy);
 
         return true;
     }
 
     /**
-     * Resetuje hasło
+     * Resetuje hasło użytkownika o podanym loginie.
+     * Zwraca false, jeśli użytkownik nie istnieje.
      */
     public boolean resetujHaslo(String login, String noweHaslo) {
-        if (login == null || login.trim().isEmpty()) {
-            throw new IllegalArgumentException("Login nie może być pusty");
-        }
-        if (noweHaslo == null || noweHaslo.trim().isEmpty()) {
-            throw new IllegalArgumentException("Nowe hasło nie może być puste");
-        }
+        String l = wymaganyTekst(login, "Login nie może być pusty");
+        String h = wymaganyTekst(noweHaslo, "Nowe hasło nie może być puste");
 
-        // Walidacja długości hasła
-        if (noweHaslo.length() < 4) {
-            throw new IllegalArgumentException("Hasło musi mieć co najmniej 4 znaki");
-        }
+        walidujHaslo(h);
 
         List<Uzytkownik> uzytkownicy = uzytkownikDAO.wczytajWszystkich();
 
         for (Uzytkownik u : uzytkownicy) {
-            if (u.getLogin().equals(login)) {
-                u.setHaslo(noweHaslo);
+            if (u.getLogin().equals(l)) {
+                u.setHaslo(h);
                 uzytkownikDAO.zapiszWszystkich(uzytkownicy);
                 return true;
             }
         }
+
         return false;
     }
 
     /**
-     * Znajduje użytkownika po ID
+     * Sprawdza czy tekst jest wymagany i zwraca jego wersję bez spacji na brzegach.
      */
-    public Uzytkownik znajdzUzytkownikaPoId(int id) {
-        return uzytkownikDAO.znajdzPoId(id);
+    private String wymaganyTekst(String value, String komunikatBledu) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(komunikatBledu);
+        }
+        return value.trim();
     }
 
     /**
-     * Sprawdza czy login jest dostępny
+     * Waliduje minimalne wymagania dla hasła.
      */
-    public boolean czyLoginWolny(String login) {
-        if (login == null || login.trim().isEmpty()) {
-            throw new IllegalArgumentException("Login nie może być pusty");
+    private void walidujHaslo(String haslo) {
+        if (haslo.length() < MIN_DLUGOSC_HASLA) {
+            throw new IllegalArgumentException("Hasło musi mieć co najmniej " + MIN_DLUGOSC_HASLA + " znaki");
         }
+    }
 
-        List<Uzytkownik> uzytkownicy = uzytkownikDAO.wczytajWszystkich();
-        return uzytkownicy.stream().noneMatch(u -> u.getLogin().equals(login));
+    /**
+     * Waliduje format adresu email (podstawowa walidacja).
+     */
+    private void walidujEmail(String email) {
+        if (!email.contains("@") || !email.contains(".")) {
+            throw new IllegalArgumentException("Podaj prawidłowy adres email");
+        }
+    }
+
+    /**
+     * Sprawdza czy login jest już używany.
+     */
+    private boolean czyLoginZajety(List<Uzytkownik> uzytkownicy, String login) {
+        return uzytkownicy.stream().anyMatch(u -> u.getLogin().equals(login));
+    }
+
+    /**
+     * Wyznacza kolejne ID użytkownika na podstawie danych w pliku.
+     */
+    private int wyznaczNoweId(List<Uzytkownik> uzytkownicy) {
+        int maxId = uzytkownicy.stream()
+                .mapToInt(Uzytkownik::getId)
+                .max()
+                .orElse(0);
+        return maxId + 1;
     }
 }
