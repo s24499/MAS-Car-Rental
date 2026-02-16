@@ -23,7 +23,7 @@ import java.util.List;
  * Dialog do edycji dodatków.
  * UWAGA: Ta klasa zawiera TYLKO logikę GUI, cała logika biznesowa jest w Service!
  */
-public class EkranEdycjaDodatku {
+public class EkranEdytujDodatek {
 
     private final DodatekService dodatekService = new DodatekService();
     private boolean zmieniono = false;

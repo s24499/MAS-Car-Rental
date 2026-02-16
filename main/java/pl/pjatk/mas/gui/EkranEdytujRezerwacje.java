@@ -16,7 +16,6 @@ import pl.pjatk.mas.model.StatusRezerwacji;
 import pl.pjatk.mas.service.DodatekService;
 import pl.pjatk.mas.service.RezerwacjaService;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +25,7 @@ import java.util.List;
  * Umożliwia edycję wszystkich parametrów (klienta, samochodu, dat, dodatków, ceny, statusu).
  * UWAGA: Ta klasa zawiera TYLKO logikę GUI, cała logika biznesowa jest w Service!
  */
-public class EkranEdycjaRezerwacji {
+public class EkranEdytujRezerwacje {
 
     private final RezerwacjaService rezerwacjaService = new RezerwacjaService();
     private final DodatekService dodatekService = new DodatekService();

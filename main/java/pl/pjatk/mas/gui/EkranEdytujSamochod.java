@@ -16,7 +16,7 @@ import pl.pjatk.mas.model.Samochod;
 
 import java.time.Year;
 
-public class EkranEdycjaSamochodu {
+public class EkranEdytujSamochod {
 
     private final SamochodDAO samochodDAO = new SamochodDAO();
     private final CennikDAO cennikDAO = new CennikDAO();
@@ -50,7 +50,6 @@ public class EkranEdycjaSamochodu {
         Label lblCennikInfo = new Label();
         lblCennikInfo.setStyle("-fx-font-weight: bold;");
         ustawCennikInfo(lblCennikInfo, cbKategoria.getValue());
-
         cbKategoria.valueProperty().addListener((obs, oldVal, newVal) -> ustawCennikInfo(lblCennikInfo, newVal));
 
         VBox pola = new VBox(12,
@@ -127,15 +126,39 @@ public class EkranEdycjaSamochodu {
             }
         });
 
+        Button btnUsun = new Button("Usuń samochód");
+        btnUsun.setPrefWidth(120);
+        btnUsun.setStyle("-fx-font-size: 11; -fx-text-fill: white; -fx-background-color: #d32f2f;");
+        btnUsun.setOnAction(e -> {
+            Alert potwierdzenie = new Alert(Alert.AlertType.CONFIRMATION);
+            potwierdzenie.setTitle("Potwierdzenie usunięcia");
+            potwierdzenie.setHeaderText("Czy na pewno chcesz usunąć ten samochód?");
+            potwierdzenie.setContentText(
+                    "Marka/Model: " + samochod.getMarka() + " " + samochod.getModel() +
+                            "\nNr rej: " + samochod.getNumerRejestracyjny()
+            );
+
+            if (potwierdzenie.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+                try {
+                    samochodDAO.usunPoId(samochod.getId());
+                    zmieniono = true;
+                    info("Sukces", "Samochód został usunięty.");
+                    dialog.close();
+                } catch (Exception ex) {
+                    blad("Błąd", "Nie udało się usunąć samochodu: " + ex.getMessage());
+                }
+            }
+        });
+
         Button btnAnuluj = new Button("Anuluj");
         btnAnuluj.setPrefWidth(120);
         btnAnuluj.setOnAction(e -> dialog.close());
 
-        btnBox.getChildren().addAll(btnZapisz, btnAnuluj);
+        btnBox.getChildren().addAll(btnZapisz, btnUsun, btnAnuluj);
 
         root.getChildren().addAll(lblTytul, new Separator(), pola, btnBox);
 
-        dialog.setScene(new Scene(root, 460, 490));
+        dialog.setScene(new Scene(root, 460, 510));
         dialog.showAndWait();
 
         return zmieniono;

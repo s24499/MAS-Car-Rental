@@ -110,7 +110,7 @@ public class EkranFloty {
                     if (wybrany != null) {
                         // UWAGA: nazwa klasy wg Twojego projektu
                         // Jeśli masz EkranEdytujSamochod, zmień poniższą linię na new EkranEdytujSamochod()
-                        boolean zmienionoAuto = new EkranEdycjaSamochodu().pokazDialog(stage, wybrany);
+                        boolean zmienionoAuto = new EkranEdytujSamochod().pokazDialog(stage, wybrany);
                         if (zmienionoAuto) {
                             List<Samochod> odswiezone = flotaService.pobierzWszystkieSamochody();
                             listaAut.setItems(FXCollections.observableArrayList(odswiezone));
@@ -229,7 +229,7 @@ public class EkranFloty {
                 if (event.getClickCount() == 2) {
                     Dodatek wybranyDodalek = listaAllDodatkow.getSelectionModel().getSelectedItem();
                     if (wybranyDodalek != null) {
-                        boolean zmieniono = new EkranEdycjaDodatku().pokazDialog(stage, wybranyDodalek);
+                        boolean zmieniono = new EkranEdytujDodatek().pokazDialog(stage, wybranyDodalek);
                         if (zmieniono) {
                             // Odśwież listę wszystkich dodatków
                             List<Dodatek> wszystkieDodatkiOdswiezeni = dodatekService.pobierzWszystkieDodatki();
@@ -337,7 +337,7 @@ public class EkranFloty {
                 if (event.getClickCount() == 2) {
                     Rezerwacja wybrana = listaRez.getSelectionModel().getSelectedItem();
                     if (wybrana != null) {
-                        boolean zmieniono = new EkranEdycjaRezerwacji().pokazDialog(stage, wybrana);
+                        boolean zmieniono = new EkranEdytujRezerwacje().pokazDialog(stage, wybrana);
                         if (zmieniono) {
                             // Odśwież listę rezerwacji
                             List<Samochod> zaktualizowaneAuta = flotaService.pobierzWszystkieSamochody();

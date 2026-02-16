@@ -75,7 +75,7 @@ public class SamochodDAO extends BazaDAO {
                 .orElse(null);
     }
 
-    // Aktualizuje samochód - zbędne, czy nie można wykorzystać?
+    // Aktualizuje samochód
     public void aktualizuj(Samochod samochod) {
         List<Samochod> samochody = wczytajWszystkie();
         for (int i = 0; i < samochody.size(); i++) {

@@ -39,6 +39,7 @@ public class CennikDAO extends BazaDAO {
         return cenniki;
     }
 
+    // Zapisuje wszystkie cenniki do pliku
     public void zapiszWszystkie(List<Cennik> cenniki) {
         List<String> linie = new ArrayList<>();
         linie.add("id;kategoria;stawkaZaDobe;procentDodatkowyKierowca");
@@ -53,6 +54,7 @@ public class CennikDAO extends BazaDAO {
         zapiszLinie(sciezkaDoPliku(PLIK), linie);
     }
 
+    // Znajduje cennik po ID
     public Cennik znajdzPoId(Long id) {
         return wczytajWszystkie().stream()
                 .filter(c -> c.getId().equals(id))
@@ -60,6 +62,7 @@ public class CennikDAO extends BazaDAO {
                 .orElse(null);
     }
 
+    // Znajduje cennik po Kategorii samochodu
     public Cennik znajdzPoKategorii(KategoriaSamochodu kategoria) {
         if (kategoria == null) {
             throw new IllegalArgumentException("Kategoria nie może być null");
