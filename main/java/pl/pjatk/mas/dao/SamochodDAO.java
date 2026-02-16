@@ -59,7 +59,7 @@ public class SamochodDAO extends BazaDAO {
         zapiszLinie(sciezkaDoPliku(PLIK), linie);
     }
 
-    // Znajduje samochód po ID
+    // Znajduje samochód po ID - zbędne, czy nie można wykorzystać?
     public Samochod znajdzPoId(Long id) {
         return wczytajWszystkie().stream()
                 .filter(s -> s.getId().equals(id))
@@ -75,7 +75,7 @@ public class SamochodDAO extends BazaDAO {
                 .orElse(null);
     }
 
-    // Aktualizuje samochód
+    // Aktualizuje samochód - zbędne, czy nie można wykorzystać?
     public void aktualizuj(Samochod samochod) {
         List<Samochod> samochody = wczytajWszystkie();
         for (int i = 0; i < samochody.size(); i++) {
@@ -87,7 +87,7 @@ public class SamochodDAO extends BazaDAO {
         zapiszWszystkie(samochody);
     }
 
-    // Usuwa samochód po ID
+    // Usuwa samochód po ID - zbędne, czy nie można wykorzystać?
     public void usunPoId(Long id) {
         List<Samochod> samochody = wczytajWszystkie();
         samochody.removeIf(s -> s.getId().equals(id));

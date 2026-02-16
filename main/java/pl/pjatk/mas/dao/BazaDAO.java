@@ -5,10 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Abstrakcyjna klasa bazowa dla DAO.
- * Zapewnia metody do wczytywania i zapisywania plików tekstowych.
- */
 public abstract class BazaDAO {
 
     // Buduje ścieżkę do pliku w katalogu resources/DB

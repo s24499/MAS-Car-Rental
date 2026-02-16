@@ -73,12 +73,55 @@ public class EkranFloty {
         lewyPanel.setPadding(new Insets(15));
         lewyPanel.setPrefWidth(280);
 
+        boolean pracownik = Session.getZalogowany() instanceof Pracownik;
+
         Label lblAuta = new Label("Dostępne samochody");
+
+// Pasek nad listą: tytuł + przycisk "+"
+        HBox naglowekListyAut = new HBox(10);
+        naglowekListyAut.setAlignment(Pos.CENTER_LEFT);
+
+        Button btnDodajAuto = new Button("+");
+        btnDodajAuto.setPrefWidth(35);
+        btnDodajAuto.setFocusTraversable(false);
+        btnDodajAuto.setTooltip(new Tooltip("Dodaj nowy samochód"));
+        btnDodajAuto.setVisible(pracownik);
+        btnDodajAuto.setManaged(pracownik);
+
+        naglowekListyAut.getChildren().addAll(lblAuta, btnDodajAuto);
+
         ListView<Samochod> listaAut = new ListView<>();
         listaAut.setItems(FXCollections.observableArrayList(auta));
         VBox.setVgrow(listaAut, Priority.ALWAYS);
 
-        lewyPanel.getChildren().addAll(lblAuta, listaAut);
+        lewyPanel.getChildren().addAll(naglowekListyAut, listaAut);
+
+// Klik "+" -> dodaj samochód
+        btnDodajAuto.setOnAction(e -> {
+            boolean dodano = new EkranDodajSamochod().pokazDialog(stage);
+            if (dodano) {
+                List<Samochod> odswiezone = flotaService.pobierzWszystkieSamochody();
+                listaAut.setItems(FXCollections.observableArrayList(odswiezone));
+                listaAut.refresh();
+            }
+        });
+
+// Dwuklik na auto -> edycja (tylko pracownik)
+        if (pracownik) {
+            listaAut.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 2) {
+                    Samochod wybrany = listaAut.getSelectionModel().getSelectedItem();
+                    if (wybrany != null) {
+                        boolean zmienionoAuto = new EkranEdycjaSamochodu().pokazDialog(stage, wybrany);
+                        if (zmienionoAuto) {
+                            List<Samochod> odswiezone = flotaService.pobierzWszystkieSamochody();
+                            listaAut.setItems(FXCollections.observableArrayList(odswiezone));
+                            listaAut.refresh();
+                        }
+                    }
+                }
+            });
+        }
 
         // ========== PRAWY PANEL - SZCZEGÓŁY I REZERWACJA ==========
         VBox prawyPanel = new VBox(12);
@@ -95,7 +138,6 @@ public class EkranFloty {
         ListView<Rezerwacja> listaRez = new ListView<>();
         listaRez.setPrefHeight(100);
 
-        boolean pracownik = Session.getZalogowany() instanceof Pracownik;
         lblRezerwacje.setVisible(pracownik);
         lblRezerwacje.setManaged(pracownik);
         listaRez.setVisible(pracownik);

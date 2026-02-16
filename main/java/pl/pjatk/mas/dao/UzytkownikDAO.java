@@ -69,7 +69,7 @@ public class UzytkownikDAO extends BazaDAO {
                 .orElse(null);
     }
 
-    // Aktualizuje istniejącego użytkownika
+    // Aktualizuje istniejącego użytkownika - zbędne, czy nie można wykorzystać?
     public void aktualizuj(Uzytkownik uzytkownik) {
         List<Uzytkownik> uzytkownicy = wczytajWszystkich();
         for (int i = 0; i < uzytkownicy.size(); i++) {
@@ -81,7 +81,7 @@ public class UzytkownikDAO extends BazaDAO {
         zapiszWszystkich(uzytkownicy);
     }
 
-    // Usuwa użytkownika po ID
+    // Usuwa użytkownika po ID - zbędne, czy nie można wykorzystać?
     public void usunPoId(int id) {
         List<Uzytkownik> uzytkownicy = wczytajWszystkich();
         uzytkownicy.removeIf(u -> u.getId() == id);
