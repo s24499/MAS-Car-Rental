@@ -7,15 +7,11 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
-import pl.pjatk.mas.util.App;
-import pl.pjatk.mas.model.Dodatek;
-import pl.pjatk.mas.model.Klient;
-import pl.pjatk.mas.model.Pracownik;
-import pl.pjatk.mas.model.Rezerwacja;
-import pl.pjatk.mas.model.Samochod;
+import pl.pjatk.mas.model.*;
 import pl.pjatk.mas.service.DodatekService;
 import pl.pjatk.mas.service.FlotaService;
 import pl.pjatk.mas.service.RezerwacjaService;
+import pl.pjatk.mas.util.App;
 import pl.pjatk.mas.util.Session;
 
 import java.math.BigDecimal;
@@ -77,7 +73,7 @@ public class EkranFloty {
 
         Label lblAuta = new Label("Dostępne samochody");
 
-// Pasek nad listą: tytuł + przycisk "+"
+        // Pasek nad listą: tytuł + przycisk "+"
         HBox naglowekListyAut = new HBox(10);
         naglowekListyAut.setAlignment(Pos.CENTER_LEFT);
 
@@ -96,7 +92,7 @@ public class EkranFloty {
 
         lewyPanel.getChildren().addAll(naglowekListyAut, listaAut);
 
-// Klik "+" -> dodaj samochód
+        // Klik "+" -> dodaj samochód
         btnDodajAuto.setOnAction(e -> {
             boolean dodano = new EkranDodajSamochod().pokazDialog(stage);
             if (dodano) {
@@ -106,12 +102,14 @@ public class EkranFloty {
             }
         });
 
-// Dwuklik na auto -> edycja (tylko pracownik)
+        // Dwuklik na auto -> edycja (tylko pracownik)
         if (pracownik) {
             listaAut.setOnMouseClicked(event -> {
                 if (event.getClickCount() == 2) {
                     Samochod wybrany = listaAut.getSelectionModel().getSelectedItem();
                     if (wybrany != null) {
+                        // UWAGA: nazwa klasy wg Twojego projektu
+                        // Jeśli masz EkranEdytujSamochod, zmień poniższą linię na new EkranEdytujSamochod()
                         boolean zmienionoAuto = new EkranEdycjaSamochodu().pokazDialog(stage, wybrany);
                         if (zmienionoAuto) {
                             List<Samochod> odswiezone = flotaService.pobierzWszystkieSamochody();
@@ -185,11 +183,46 @@ public class EkranFloty {
         // --- Zarządzanie dodatkami (tylko dla pracownika) ---
         if (pracownik) {
             Separator sepDodatki = new Separator();
+
+            // Nagłówek + przycisk "+"
+            HBox naglowekDodatki = new HBox(10);
+            naglowekDodatki.setAlignment(Pos.CENTER_LEFT);
+
             Label lblZarzadzanieDodatkami = new Label("Zarządzanie dodatkami");
             lblZarzadzanieDodatkami.setStyle("-fx-font-weight: bold; -fx-font-size: 12;");
 
+            Button btnDodajDodatek = new Button("+");
+            btnDodajDodatek.setPrefWidth(35);
+            btnDodajDodatek.setFocusTraversable(false);
+            btnDodajDodatek.setTooltip(new Tooltip("Dodaj nowy dodatek"));
+
+            naglowekDodatki.getChildren().addAll(lblZarzadzanieDodatkami, btnDodajDodatek);
+
             ListView<Dodatek> listaAllDodatkow = new ListView<>();
             listaAllDodatkow.setPrefHeight(100);
+
+            // Wczytaj wszystkie dodatki
+            List<Dodatek> wszystkieDodatki = dodatekService.pobierzWszystkieDodatki();
+            listaAllDodatkow.setItems(FXCollections.observableArrayList(wszystkieDodatki));
+
+            // Klik "+" -> dodaj dodatek
+            btnDodajDodatek.setOnAction(e -> {
+                boolean dodano = new EkranDodajDodatek().pokazDialog(stage);
+                if (dodano) {
+                    // Odśwież listę wszystkich dodatków
+                    List<Dodatek> odswiezone = dodatekService.pobierzWszystkieDodatki();
+                    listaAllDodatkow.setItems(FXCollections.observableArrayList(odswiezone));
+                    listaAllDodatkow.refresh();
+
+                    // Odśwież dodatki dla aktualnie wybranego auta
+                    Samochod aktualneAuto = listaAut.getSelectionModel().getSelectedItem();
+                    if (aktualneAuto != null) {
+                        List<Dodatek> dodatkiAktualnegoAuta = dodatekService.pobierzDodatkiDlaSamochodu(aktualneAuto);
+                        listaDod.setItems(FXCollections.observableArrayList(dodatkiAktualnegoAuta));
+                        listaDod.refresh();
+                    }
+                }
+            });
 
             // Double-click obsługa na dodatek
             listaAllDodatkow.setOnMouseClicked(event -> {
@@ -199,33 +232,23 @@ public class EkranFloty {
                         boolean zmieniono = new EkranEdycjaDodatku().pokazDialog(stage, wybranyDodalek);
                         if (zmieniono) {
                             // Odśwież listę wszystkich dodatków
-                            List<Dodatek> wszystkieDodatkiOdswiezeni =
-                                    dodatekService.pobierzWszystkieDodatki();
-                            listaAllDodatkow.setItems(FXCollections.observableArrayList(
-                                    wszystkieDodatkiOdswiezeni
-                            ));
+                            List<Dodatek> wszystkieDodatkiOdswiezeni = dodatekService.pobierzWszystkieDodatki();
+                            listaAllDodatkow.setItems(FXCollections.observableArrayList(wszystkieDodatkiOdswiezeni));
 
                             // Odśwież dodatki dla wybranego samochodu
                             Samochod aktualneAuto = listaAut.getSelectionModel().getSelectedItem();
                             if (aktualneAuto != null) {
-                                List<Dodatek> dodatkiAktualnegoAuta =
-                                        dodatekService.pobierzDodatkiDlaSamochodu(aktualneAuto);
-                                listaDod.setItems(FXCollections.observableArrayList(
-                                        dodatkiAktualnegoAuta
-                                ));
+                                List<Dodatek> dodatkiAktualnegoAuta = dodatekService.pobierzDodatkiDlaSamochodu(aktualneAuto);
+                                listaDod.setItems(FXCollections.observableArrayList(dodatkiAktualnegoAuta));
                             }
                         }
                     }
                 }
             });
 
-            // Wczytaj wszystkie dodatki
-            List<Dodatek> wszystkieDodatki = dodatekService.pobierzWszystkieDodatki();
-            listaAllDodatkow.setItems(FXCollections.observableArrayList(wszystkieDodatki));
-
             prawyPanel.getChildren().addAll(
                     sepDodatki,
-                    lblZarzadzanieDodatkami,
+                    naglowekDodatki,
                     listaAllDodatkow
             );
         }
