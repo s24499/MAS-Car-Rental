@@ -172,16 +172,8 @@ public class EkranFloty {
     /**
      * Buduje prawy panel ze szczegółami, formularzem rezerwacji i widokiem pracownika.
      */
-    private VBox zbudujPrawyPanel(Stage stage,
-                                  boolean pracownik,
-                                  TextArea szczegoly,
-                                  ListView<Rezerwacja> listaRez,
-                                  ListView<Dodatek> listaDod,
-                                  DatePicker dataOd,
-                                  DatePicker dataDo,
-                                  Label wartoscCeny,
-                                  Button btnRezerwuj,
-                                  ListView<Samochod> listaAut) {
+    private VBox zbudujPrawyPanel(Stage stage, boolean pracownik, TextArea szczegoly, ListView<Rezerwacja> listaRez, ListView<Dodatek> listaDod,
+                                  DatePicker dataOd, DatePicker dataDo, Label wartoscCeny, Button btnRezerwuj, ListView<Samochod> listaAut) {
 
         szczegoly.setEditable(false);
         szczegoly.setPrefHeight(120);
@@ -363,13 +355,8 @@ public class EkranFloty {
     /**
      * Obsługuje utworzenie rezerwacji dla wybranego auta.
      */
-    private void obsluzRezerwacje(ListView<Samochod> listaAut,
-                                  DatePicker dataOd,
-                                  DatePicker dataDo,
-                                  ListView<Dodatek> listaDod,
-                                  Label wartoscCeny,
-                                  boolean pracownik,
-                                  ListView<Rezerwacja> listaRez) {
+    private void obsluzRezerwacje(ListView<Samochod> listaAut, DatePicker dataOd, DatePicker dataDo, ListView<Dodatek> listaDod,
+                                  Label wartoscCeny, boolean pracownik, ListView<Rezerwacja> listaRez) {
         Samochod auto = listaAut.getSelectionModel().getSelectedItem();
 
         try {
@@ -405,11 +392,7 @@ public class EkranFloty {
     /**
      * Przelicza szacowaną cenę rezerwacji na podstawie wyboru dat i dodatków.
      */
-    private void przeliczCene(Samochod auto,
-                              DatePicker od,
-                              DatePicker doDo,
-                              ListView<Dodatek> listaDodatkow,
-                              Label labelCena) {
+    private void przeliczCene(Samochod auto, DatePicker od, DatePicker doDo, ListView<Dodatek> listaDodatkow, Label labelCena) {
         try {
             BigDecimal cena = rezerwacjaService.obliczSzacowanaCena(
                     auto,
